@@ -75,7 +75,7 @@ if df is not None:
         if st.session_state.lista_idp:
             st.subheader("Resumen del IDP Actual (Estructuras / Actividades)")
             df_idp = pd.DataFrame(st.session_state.lista_idp)
-            df_idp.index = df_idp.index + 1  # Índices desde 1 para mayor orden
+            df_idp.index = df_idp.index + 1  # Índices desde 1
             
             # Obtener precio unitario de las estructuras para calcular su monto asegurando tipo numérico
             cols_precio = [c for c in df_c.columns if 'precio' in c.lower() or 'costo' in c.lower()]
@@ -85,14 +85,14 @@ if df is not None:
                 df_idp['Precio Unitario'] = pd.to_numeric(df_idp['Actividad'].map(precios_dict), errors='coerce')
                 df_idp['Monto Total'] = df_idp['Precio Unitario'] * pd.to_numeric(df_idp['Cantidad'], errors='coerce')
             
-            # Formatear valores monetarios para la tabla visual HTML
+            # Formatear valores monetarios
             df_idp_show = df_idp.copy()
             df_idp_show['Precio Unitario'] = df_idp_show['Precio Unitario'].map(lambda x: f"${x:,.2f}" if pd.notnull(x) else "$0.00")
             df_idp_show['Monto Total'] = df_idp_show['Monto Total'].map(lambda x: f"${x:,.2f}" if pd.notnull(x) else "$0.00")
             
-            # Renderizar tabla superior con diseño personalizado (Azul Marino y Letras Blancas)
+            # Renderizar tabla superior con diseño personalizado
             html_est = df_idp_show.to_html(classes='custom-table', escape=False)
-            st.markdown(f"""
+            st.html(f"""
                 <style>
                 .custom-table {{
                     width: 100%;
@@ -100,17 +100,18 @@ if df is not None:
                     font-family: sans-serif;
                     font-size: 14px;
                     background-color: white;
+                    margin-bottom: 15px;
                 }}
                 .custom-table th {{
                     background-color: #0b2545 !important;
                     color: white !important;
                     text-align: left;
-                    padding: 10px 12px;
+                    padding: 12px;
                     font-weight: bold;
                     border: 1px solid #0b2545;
                 }}
                 .custom-table td {{
-                    padding: 8px 12px;
+                    padding: 10px 12px;
                     border-bottom: 1px solid #e0e0e0;
                     color: #31333F;
                 }}
@@ -119,16 +120,15 @@ if df is not None:
                 }}
                 </style>
                 {html_est}
-            """, unsafe_allow_html=True)
+            """)
             
-            # Opción para eliminar una estructura específica por su número de fila (Índice)
+            # Opción para eliminar una estructura específica por su número de fila
             col_del1, col_del2 = st.columns([2, 1])
             with col_del1:
                 indice_a_borrar = st.selectbox("Selecciona el número de fila de la estructura a eliminar:", options=list(df_idp.index))
             with col_del2:
-                st.write("") # Espaciador vertical
+                st.write("") 
                 if st.button("Eliminar Fila Seleccionada"):
-                    # Ajustar índice real (restaurando base 0 para el pop de la lista)
                     st.session_state.lista_idp.pop(indice_a_borrar - 1)
                     st.success(f"Fila {indice_a_borrar} eliminada correctamente.")
                     st.rerun()
@@ -181,11 +181,11 @@ if df is not None:
                     df_resumen = df_resumen.rename(columns=renombres)
                     df_resumen.index = range(1, len(df_resumen) + 1)
                     
-                    # Renderizar tabla inferior con diseño personalizado (Azul Marino y Letras Blancas)
+                    # Renderizar tabla inferior con diseño personalizado en azul marino
                     html_mat = df_resumen.to_html(classes='custom-table', escape=False)
-                    st.markdown(f"""
+                    st.html(f"""
                         {html_mat}
-                    """, unsafe_allow_html=True)
+                    """)
                 else:
                     st.dataframe(df_filtrado, use_container_width=True)
             else:
