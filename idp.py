@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import os
+import io
 
 st.set_page_config(page_title="Generador de IDP", layout="wide")
 
@@ -84,12 +85,12 @@ if df is not None:
                 df_idp['Precio Unitario'] = pd.to_numeric(df_idp['Actividad'].map(precios_dict), errors='coerce')
                 df_idp['Monto Total'] = df_idp['Precio Unitario'] * pd.to_numeric(df_idp['Cantidad'], errors='coerce')
             
-            # Formatear valores monetarios y preparar dataframe sin índice
+            # Formatear valores monetarios
             df_idp_show = df_idp.copy()
             df_idp_show['Precio Unitario'] = df_idp_show['Precio Unitario'].map(lambda x: f"${x:,.2f}" if pd.notnull(x) else "$0.00")
             df_idp_show['Monto Total'] = df_idp_show['Monto Total'].map(lambda x: f"${x:,.2f}" if pd.notnull(x) else "$0.00")
             
-            # Renderizar tabla superior con diseño personalizado (Sin columna de índice)
+            # Renderizar tabla superior con anchos controlados estrictamente por CSS
             html_est = df_idp_show.to_html(classes='custom-table', escape=False, index=False)
             st.html(f"""
                 <style>
@@ -101,19 +102,24 @@ if df is not None:
                     background-color: white;
                     margin-bottom: 15px;
                 }}
+                .custom-table th, .custom-table td {{
+                    padding: 10px 12px;
+                    border-bottom: 1px solid #e0e0e0;
+                    text-align: left;
+                }}
                 .custom-table th {{
                     background-color: #0b2545 !important;
                     color: white !important;
-                    text-align: left;
-                    padding: 12px;
                     font-weight: bold;
                     border: 1px solid #0b2545;
                 }}
-                .custom-table td {{
-                    padding: 10px 12px;
-                    border-bottom: 1px solid #e0e0e0;
-                    color: #31333F;
-                }}
+                /* Control estricto de anchos para la tabla superior */
+                .custom-table th:nth-child(1), .custom-table td:nth-child(1) {{ width: 14%; }}
+                .custom-table th:nth-child(2), .custom-table td:nth-child(2) {{ width: 12%; }}
+                .custom-table th:nth-child(3), .custom-table td:nth-child(3) {{ width: 44%; }}
+                .custom-table th:nth-child(4), .custom-table td:nth-child(4) {{ width: 8%; text-align: center; }}
+                .custom-table th:nth-child(5), .custom-table td:nth-child(5) {{ width: 11%; text-align: right; }}
+                .custom-table th:nth-child(6), .custom-table td:nth-child(6) {{ width: 11%; text-align: right; }}
                 .custom-table tr:hover {{
                     background-color: #f8f9fa;
                 }}
@@ -124,7 +130,6 @@ if df is not None:
             # Opción para eliminar una estructura específica por su número de fila
             col_del1, col_del2 = st.columns([2, 1])
             with col_del1:
-                # Opciones basadas en el número de fila visible (1 a N)
                 opciones_filas = list(range(1, len(df_idp) + 1))
                 fila_a_borrar = st.selectbox("Selecciona el número de fila de la estructura a eliminar:", options=opciones_filas)
             with col_del2:
@@ -144,6 +149,7 @@ if df is not None:
             df_idp_agrupado = df_idp.groupby("Actividad")["Cantidad"].sum().to_dict()
             df_filtrado = df_c[df_c['Actividad'].isin(df_idp_agrupado.keys())].copy()
             
+            df_resumen = pd.DataFrame()
             if not df_filtrado.empty:
                 df_filtrado['Cant_IDP'] = df_filtrado['Actividad'].map(df_idp_agrupado)
                 col_cant_mat = [c for c in df_filtrado.columns if 'cant' in c.lower() and c.lower() != 'cantidad' and c.lower() != 'cant_idp']
@@ -182,15 +188,62 @@ if df is not None:
                     
                     df_resumen = df_resumen.rename(columns=renombres)
                     
-                    # Renderizar tabla inferior con diseño personalizado (Sin columna de índice)
-                    html_mat = df_resumen.to_html(classes='custom-table', escape=False, index=False)
+                    # Renderizar tabla inferior con anchos controlados por CSS
+                    html_mat = df_resumen.to_html(classes='custom-table-mat', escape=False, index=False)
                     st.html(f"""
+                        <style>
+                        .custom-table-mat {{
+                            width: 100%;
+                            border-collapse: collapse;
+                            font-family: sans-serif;
+                            font-size: 14px;
+                            background-color: white;
+                            margin-bottom: 15px;
+                        }}
+                        .custom-table-mat th, .custom-table-mat td {{
+                            padding: 10px 12px;
+                            border-bottom: 1px solid #e0e0e0;
+                            text-align: left;
+                        }}
+                        .custom-table-mat th {{
+                            background-color: #0b2545 !important;
+                            color: white !important;
+                            font-weight: bold;
+                            border: 1px solid #0b2545;
+                        }}
+                        /* Control estricto de anchos para la tabla de materiales */
+                        .custom-table-mat th:nth-child(1), .custom-table-mat td:nth-child(1) {{ width: 15%; }}
+                        .custom-table-mat th:nth-child(2), .custom-table-mat td:nth-child(2) {{ width: 55%; }}
+                        .custom-table-mat th:nth-child(3), .custom-table-mat td:nth-child(3) {{ width: 15%; }}
+                        .custom-table-mat th:nth-child(4), .custom-table-mat td:nth-child(4) {{ width: 15%; text-align: center; }}
+                        .custom-table-mat tr:hover {{
+                            background-color: #f8f9fa;
+                        }}
+                        </style>
                         {html_mat}
                     """)
                 else:
                     st.dataframe(df_filtrado, use_container_width=True)
             else:
                 st.info("No hay materiales asociados a las actividades seleccionadas.")
+            
+            # --- SECCIÓN DE EXPORTACIÓN A EXCEL ---
+            st.markdown("---")
+            st.subheader("Exportar Resultados")
+            
+            output = io.BytesIO()
+            with pd.ExcelWriter(output, engine='openpyxl') as writer:
+                df_idp.to_excel(writer, sheet_name='Estructuras_Actividades', index=False)
+                if not df_resumen.empty:
+                    df_resumen.to_excel(writer, sheet_name='Requerimiento_Materiales', index=False)
+            output.seek(0)
+            
+            st.download_button(
+                label="📥 Descargar IDP Completo en Excel",
+                data=output,
+                file_name=f"IDP_{contrata_sel.replace(' ', '_')}.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            )
             
             if st.button("Limpiar Todo el IDP"):
                 st.session_state.lista_idp = []
