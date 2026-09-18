@@ -77,22 +77,43 @@ if df is not None:
             df_idp = pd.DataFrame(st.session_state.lista_idp)
             st.dataframe(df_idp, use_container_width=True)
             
-            st.subheader("Requerimiento de Materiales y Montos")
-            # Filtrar filas del Excel para las actividades agregadas y calcular materiales
-            actividades_agregadas = {item["Actividad"]: item["Cantidad"] for item in st.session_state.lista_idp}
+            st.subheader("Requerimiento Consolidado de Materiales y Montos")
             
-            df_filtrado = df_c[df_c['Actividad'].isin(actividades_agregadas.keys())].copy()
+            # Consolidar cantidades del IDP por actividad
+            df_idp_agrupado = df_idp.groupby("Actividad")["Cantidad"].sum().to_dict()
+            
+            df_filtrado = df_c[df_c['Actividad'].isin(df_idp_agrupado.keys())].copy()
             
             if not df_filtrado.empty:
-                # Multiplicar cantidad unitaria por la cantidad de la actividad seleccionada
-                # Buscamos columnas de cantidad y precio de materiales si existen en el Excel
-                col_cant_mat = [c for c in df_filtrado.columns if 'cant' in c.lower() and c.lower() != 'cantidad']
-                col_precio = [c for c in df_filtrado.columns if 'precio' in c.lower() or 'costo' in c.lower()]
+                df_filtrado['Cant_IDP'] = df_filtrado['Actividad'].map(df_idp_agrupado)
                 
-                # Mapeamos la cantidad multiplicadora del IDP
-                df_filtrado['Cant_IDP'] = df_filtrado['Actividad'].map(actividades_agregadas)
+                # Identificar la columna de cantidad de materiales en el Excel de forma flexible
+                col_cant_mat = [c for c in df_filtrado.columns if 'cant' in c.lower() and c.lower() != 'cantidad' and c.lower() != 'cant_idp']
                 
-                st.dataframe(df_filtrado, use_container_width=True)
+                if col_cant_mat:
+                    c_mat = col_cant_mat[0]
+                    # Calcular el total por material individual
+                    df_filtrado['Cantidad_Total'] = df_filtrado[c_mat] * df_filtrado['Cant_IDP']
+                    
+                    # Identificar columnas clave para agrupar (Código SAP, Descripción de Material, Unidad, etc.)
+                    cols_cod = [c for c in df_filtrado.columns if 'sap' in c.lower() or 'codigo' in c.lower()]
+                    cols_desc_mat = [c for c in df_filtrado.columns if 'mat' in c.lower() or 'descripci_mat' in c.lower() or (c.lower() != 'descripción de la actividad' and 'descripci' in c.lower())]
+                    cols_und = [c for c in df_filtrado.columns if 'unid' in c.lower()]
+                    
+                    cod_col = cols_cod[0] if cols_cod else df_filtrado.columns[0]
+                    desc_mat_col = cols_desc_mat[0] if cols_desc_mat else cod_col
+                    und_col = cols_und[0] if cols_und else None
+                    
+                    # Agrupar por el material para que no se repita y sumar sus cantidades totales
+                    columnas_agrupacion = [cod_col, desc_mat_col]
+                    if und_col:
+                        columnas_agrupacion.append(und_col)
+                        
+                    df_resumen = df_filtrado.groupby(columnas_agrupacion, as_index=False)['Cantidad_Total'].sum()
+                    
+                    st.dataframe(df_resumen, use_container_width=True)
+                else:
+                    st.dataframe(df_filtrado, use_container_width=True)
             else:
                 st.info("No hay materiales asociados a las actividades seleccionadas.")
             
