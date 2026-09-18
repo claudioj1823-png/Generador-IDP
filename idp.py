@@ -89,9 +89,11 @@ if df is not None:
                 df_idp,
                 use_container_width=True,
                 column_config={
-                    "Precio Unitario": st.column_config.NumberColumn("Precio Unitario", format="$%.2f"),
-                    "Monto Total": st.column_config.NumberColumn("Monto Total", format="$%.2f"),
-                    "Cantidad": st.column_config.NumberColumn("Cantidad", format="%d")
+                    "Precio Unitario": st.column_config.NumberColumn("Precio Unitario", format="$%.2f", width="medium"),
+                    "Monto Total": st.column_config.NumberColumn("Monto Total", format="$%.2f", width="medium"),
+                    "Cantidad": st.column_config.NumberColumn("Cantidad", format="%d", width="small"),
+                    "Contratista": st.column_config.TextColumn("Contratista", width="small"),
+                    "Actividad": st.column_config.TextColumn("Actividad", width="small")
                 }
             )
             
@@ -132,13 +134,19 @@ if df is not None:
                     # Limpiar código SAP para quitar los decimales .0
                     df_resumen[cod_col] = df_resumen[cod_col].astype(str).str.replace(r'\.0$', '', regex=True)
                     
+                    # Mostrar tabla inferior con anchos personalizados y compactos
+                    config_columnas = {
+                        "Cantidad_Total": st.column_config.NumberColumn("Cantidad Total", format="%d", width="small"),
+                        cod_col: st.column_config.TextColumn("Código SAP", width="small"),
+                        desc_mat_col: st.column_config.TextColumn("Descripción de Material", width="large")
+                    }
+                    if und_col:
+                        config_columnas[und_col] = st.column_config.TextColumn("Unidad", width="small")
+                        
                     st.dataframe(
                         df_resumen,
                         use_container_width=True,
-                        column_config={
-                            "Cantidad_Total": st.column_config.NumberColumn("Cantidad Total", format="%d"),
-                            cod_col: st.column_config.TextColumn("Código SAP")
-                        }
+                        column_config=config_columnas
                     )
                 else:
                     st.dataframe(df_filtrado, use_container_width=True)
