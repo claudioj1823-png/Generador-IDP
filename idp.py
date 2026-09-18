@@ -75,7 +75,6 @@ if df is not None:
         if st.session_state.lista_idp:
             st.subheader("Resumen del IDP Actual (Estructuras / Actividades)")
             df_idp = pd.DataFrame(st.session_state.lista_idp)
-            df_idp.index = df_idp.index + 1  # Índices desde 1
             
             # Obtener precio unitario de las estructuras para calcular su monto asegurando tipo numérico
             cols_precio = [c for c in df_c.columns if 'precio' in c.lower() or 'costo' in c.lower()]
@@ -85,13 +84,13 @@ if df is not None:
                 df_idp['Precio Unitario'] = pd.to_numeric(df_idp['Actividad'].map(precios_dict), errors='coerce')
                 df_idp['Monto Total'] = df_idp['Precio Unitario'] * pd.to_numeric(df_idp['Cantidad'], errors='coerce')
             
-            # Formatear valores monetarios
+            # Formatear valores monetarios y preparar dataframe sin índice
             df_idp_show = df_idp.copy()
             df_idp_show['Precio Unitario'] = df_idp_show['Precio Unitario'].map(lambda x: f"${x:,.2f}" if pd.notnull(x) else "$0.00")
             df_idp_show['Monto Total'] = df_idp_show['Monto Total'].map(lambda x: f"${x:,.2f}" if pd.notnull(x) else "$0.00")
             
-            # Renderizar tabla superior con diseño personalizado
-            html_est = df_idp_show.to_html(classes='custom-table', escape=False)
+            # Renderizar tabla superior con diseño personalizado (Sin columna de índice)
+            html_est = df_idp_show.to_html(classes='custom-table', escape=False, index=False)
             st.html(f"""
                 <style>
                 .custom-table {{
@@ -125,12 +124,14 @@ if df is not None:
             # Opción para eliminar una estructura específica por su número de fila
             col_del1, col_del2 = st.columns([2, 1])
             with col_del1:
-                indice_a_borrar = st.selectbox("Selecciona el número de fila de la estructura a eliminar:", options=list(df_idp.index))
+                # Opciones basadas en el número de fila visible (1 a N)
+                opciones_filas = list(range(1, len(df_idp) + 1))
+                fila_a_borrar = st.selectbox("Selecciona el número de fila de la estructura a eliminar:", options=opciones_filas)
             with col_del2:
                 st.write("") 
                 if st.button("Eliminar Fila Seleccionada"):
-                    st.session_state.lista_idp.pop(indice_a_borrar - 1)
-                    st.success(f"Fila {indice_a_borrar} eliminada correctamente.")
+                    st.session_state.lista_idp.pop(fila_a_borrar - 1)
+                    st.success(f"Fila {fila_a_borrar} eliminada correctamente.")
                     st.rerun()
 
             if cols_precio:
@@ -167,8 +168,9 @@ if df is not None:
                     agregaciones = {'Cantidad_Total': 'sum'}
                     df_resumen = df_filtrado.groupby(columnas_agrupacion, as_index=False).agg(agregaciones)
                     
-                    # Limpiar código SAP para quitar los decimales .0 y cambiar nombres de columnas estéticos
+                    # Limpiar código SAP y quitar decimales en la Cantidad Total convirtiéndola a entero
                     df_resumen[cod_col] = df_resumen[cod_col].astype(str).str.replace(r'\.0$', '', regex=True)
+                    df_resumen['Cantidad_Total'] = pd.to_numeric(df_resumen['Cantidad_Total'], errors='coerce').fillna(0).astype(int)
                     
                     renombres = {
                         cod_col: "Código SAP",
@@ -179,10 +181,9 @@ if df is not None:
                         renombres[und_col] = "Unidad"
                     
                     df_resumen = df_resumen.rename(columns=renombres)
-                    df_resumen.index = range(1, len(df_resumen) + 1)
                     
-                    # Renderizar tabla inferior con diseño personalizado en azul marino
-                    html_mat = df_resumen.to_html(classes='custom-table', escape=False)
+                    # Renderizar tabla inferior con diseño personalizado (Sin columna de índice)
+                    html_mat = df_resumen.to_html(classes='custom-table', escape=False, index=False)
                     st.html(f"""
                         {html_mat}
                     """)
