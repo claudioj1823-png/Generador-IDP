@@ -4,18 +4,6 @@ import os
 
 st.set_page_config(page_title="Generador de IDP", layout="wide")
 
-# Estilo visual personalizado (Encabezados en Azul Marino y Letras Blancas)
-st.markdown("""
-    <style>
-    /* Estilo para los encabezados de las tablas en Streamlit */
-    thead tr th {
-        background-color: #0b2545 !important;
-        color: white !important;
-        font-weight: bold !important;
-    }
-    </style>
-""", unsafe_allow_html=True)
-
 # Control de Acceso
 if "autenticado" not in st.session_state:
     st.session_state.autenticado = False
@@ -87,6 +75,7 @@ if df is not None:
         if st.session_state.lista_idp:
             st.subheader("Resumen del IDP Actual (Estructuras / Actividades)")
             df_idp = pd.DataFrame(st.session_state.lista_idp)
+            df_idp.index = df_idp.index + 1  # Índices desde 1 para mayor orden
             
             # Obtener precio unitario de las estructuras para calcular su monto asegurando tipo numérico
             cols_precio = [c for c in df_c.columns if 'precio' in c.lower() or 'costo' in c.lower()]
@@ -96,27 +85,51 @@ if df is not None:
                 df_idp['Precio Unitario'] = pd.to_numeric(df_idp['Actividad'].map(precios_dict), errors='coerce')
                 df_idp['Monto Total'] = df_idp['Precio Unitario'] * pd.to_numeric(df_idp['Cantidad'], errors='coerce')
             
-            # Mostrar tabla superior
-            st.dataframe(
-                df_idp,
-                use_container_width=True,
-                column_config={
-                    "Precio Unitario": st.column_config.NumberColumn("Precio Unitario", format="$%.2f", width="medium"),
-                    "Monto Total": st.column_config.NumberColumn("Monto Total", format="$%.2f", width="medium"),
-                    "Cantidad": st.column_config.NumberColumn("Cantidad", format="%d", width="small"),
-                    "Contratista": st.column_config.TextColumn("Contratista", width="small"),
-                    "Actividad": st.column_config.TextColumn("Actividad", width="small")
-                }
-            )
+            # Formatear valores monetarios para la tabla visual HTML
+            df_idp_show = df_idp.copy()
+            df_idp_show['Precio Unitario'] = df_idp_show['Precio Unitario'].map(lambda x: f"${x:,.2f}" if pd.notnull(x) else "$0.00")
+            df_idp_show['Monto Total'] = df_idp_show['Monto Total'].map(lambda x: f"${x:,.2f}" if pd.notnull(x) else "$0.00")
+            
+            # Renderizar tabla superior con diseño personalizado (Azul Marino y Letras Blancas)
+            html_est = df_idp_show.to_html(classes='custom-table', escape=False)
+            st.markdown(f"""
+                <style>
+                .custom-table {{
+                    width: 100%;
+                    border-collapse: collapse;
+                    font-family: sans-serif;
+                    font-size: 14px;
+                    background-color: white;
+                }}
+                .custom-table th {{
+                    background-color: #0b2545 !important;
+                    color: white !important;
+                    text-align: left;
+                    padding: 10px 12px;
+                    font-weight: bold;
+                    border: 1px solid #0b2545;
+                }}
+                .custom-table td {{
+                    padding: 8px 12px;
+                    border-bottom: 1px solid #e0e0e0;
+                    color: #31333F;
+                }}
+                .custom-table tr:hover {{
+                    background-color: #f8f9fa;
+                }}
+                </style>
+                {html_est}
+            """, unsafe_allow_html=True)
             
             # Opción para eliminar una estructura específica por su número de fila (Índice)
             col_del1, col_del2 = st.columns([2, 1])
             with col_del1:
-                indice_a_borrar = st.selectbox("Selecciona el número de fila (Índice) de la estructura a eliminar:", options=list(df_idp.index))
+                indice_a_borrar = st.selectbox("Selecciona el número de fila de la estructura a eliminar:", options=list(df_idp.index))
             with col_del2:
                 st.write("") # Espaciador vertical
                 if st.button("Eliminar Fila Seleccionada"):
-                    st.session_state.lista_idp.pop(indice_a_borrar)
+                    # Ajustar índice real (restaurando base 0 para el pop de la lista)
+                    st.session_state.lista_idp.pop(indice_a_borrar - 1)
                     st.success(f"Fila {indice_a_borrar} eliminada correctamente.")
                     st.rerun()
 
@@ -154,23 +167,25 @@ if df is not None:
                     agregaciones = {'Cantidad_Total': 'sum'}
                     df_resumen = df_filtrado.groupby(columnas_agrupacion, as_index=False).agg(agregaciones)
                     
-                    # Limpiar código SAP para quitar los decimales .0
+                    # Limpiar código SAP para quitar los decimales .0 y cambiar nombres de columnas estéticos
                     df_resumen[cod_col] = df_resumen[cod_col].astype(str).str.replace(r'\.0$', '', regex=True)
                     
-                    # Mostrar tabla inferior con anchos personalizados
-                    config_columnas = {
-                        "Cantidad_Total": st.column_config.NumberColumn("Cantidad Total", format="%d", width="small"),
-                        cod_col: st.column_config.TextColumn("Código SAP", width="small"),
-                        desc_mat_col: st.column_config.TextColumn("Descripción de Material", width="large")
+                    renombres = {
+                        cod_col: "Código SAP",
+                        desc_mat_col: "Descripción de Material",
+                        'Cantidad_Total': "Cantidad Total"
                     }
                     if und_col:
-                        config_columnas[und_col] = st.column_config.TextColumn("Unidad", width="small")
-                        
-                    st.dataframe(
-                        df_resumen,
-                        use_container_width=True,
-                        column_config=config_columnas
-                    )
+                        renombres[und_col] = "Unidad"
+                    
+                    df_resumen = df_resumen.rename(columns=renombres)
+                    df_resumen.index = range(1, len(df_resumen) + 1)
+                    
+                    # Renderizar tabla inferior con diseño personalizado (Azul Marino y Letras Blancas)
+                    html_mat = df_resumen.to_html(classes='custom-table', escape=False)
+                    st.markdown(f"""
+                        {html_mat}
+                    """, unsafe_allow_html=True)
                 else:
                     st.dataframe(df_filtrado, use_container_width=True)
             else:
