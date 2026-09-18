@@ -84,7 +84,16 @@ if df is not None:
                 df_idp['Precio Unitario'] = df_idp['Actividad'].map(precios_dict)
                 df_idp['Monto Total'] = df_idp['Precio Unitario'] * df_idp['Cantidad']
             
-            st.dataframe(df_idp, use_container_width=True)
+            # Mostrar tabla superior con formato estético de dinero y anchos ajustados
+            st.dataframe(
+                df_idp,
+                use_container_width=True,
+                column_config={
+                    "Precio Unitario": st.column_config.NumberColumn(format="$#,##0.00"),
+                    "Monto Total": st.column_config.NumberColumn(format="$#,##0.00"),
+                    "Cantidad": st.column_config.NumberColumn(format="%d")
+                }
+            )
             
             if cols_precio:
                 total_estructuras = df_idp['Monto Total'].sum()
@@ -120,7 +129,17 @@ if df is not None:
                     agregaciones = {'Cantidad_Total': 'sum'}
                     df_resumen = df_filtrado.groupby(columnas_agrupacion, as_index=False).agg(agregaciones)
                     
-                    st.dataframe(df_resumen, use_container_width=True)
+                    # Mostrar tabla inferior limpia, con formato entero para cantidades y ordenando Código SAP como texto para que no deje espacios extraños
+                    df_resumen[cod_col] = df_resumen[cod_col].astype(str)
+                    
+                    st.dataframe(
+                        df_resumen,
+                        use_container_width=True,
+                        column_config={
+                            "Cantidad_Total": st.column_config.NumberColumn(format="%d"),
+                            cod_col: st.column_config.TextColumn("Código SAP")
+                        }
+                    )
                 else:
                     st.dataframe(df_filtrado, use_container_width=True)
             else:
