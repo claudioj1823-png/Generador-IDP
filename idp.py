@@ -53,7 +53,7 @@ if df is not None:
     df_c = df[df['Contrata'].str.lower() == contrata_sel.lower()]
     
     # Mapeo de actividades
-   col_desc = [c for c in df_c.columns if 'descripci' in c.lower()][0]
+col_desc = [c for c in df_c.columns if 'descripci' in c.lower()][0]
 mapeo = df_c[['Actividad', col_desc]].drop_duplicates().set_index('Actividad')[col_desc].to_dict()
 
     col1, col2, col3 = st.columns([2, 2, 1])
