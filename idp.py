@@ -76,22 +76,22 @@ if df is not None:
             st.subheader("Resumen del IDP Actual (Estructuras / Actividades)")
             df_idp = pd.DataFrame(st.session_state.lista_idp)
             
-            # Obtener precio unitario de las estructuras para calcular su monto
+            # Obtener precio unitario de las estructuras para calcular su monto asegurando tipo numérico
             cols_precio = [c for c in df_c.columns if 'precio' in c.lower() or 'costo' in c.lower()]
             if cols_precio:
                 c_precio = cols_precio[0]
                 precios_dict = df_c[['Actividad', c_precio]].drop_duplicates().set_index('Actividad')[c_precio].to_dict()
-                df_idp['Precio Unitario'] = df_idp['Actividad'].map(precios_dict)
-                df_idp['Monto Total'] = df_idp['Precio Unitario'] * df_idp['Cantidad']
+                df_idp['Precio Unitario'] = pd.to_numeric(df_idp['Actividad'].map(precios_dict), errors='coerce')
+                df_idp['Monto Total'] = df_idp['Precio Unitario'] * pd.to_numeric(df_idp['Cantidad'], errors='coerce')
             
-            # Mostrar tabla superior con formato estético de dinero y anchos ajustados
+            # Mostrar tabla superior con formato correcto de moneda
             st.dataframe(
                 df_idp,
                 use_container_width=True,
                 column_config={
-                    "Precio Unitario": st.column_config.NumberColumn(format="$#,##0.00"),
-                    "Monto Total": st.column_config.NumberColumn(format="$#,##0.00"),
-                    "Cantidad": st.column_config.NumberColumn(format="%d")
+                    "Precio Unitario": st.column_config.NumberColumn("Precio Unitario", format="$%.2f"),
+                    "Monto Total": st.column_config.NumberColumn("Monto Total", format="$%.2f"),
+                    "Cantidad": st.column_config.NumberColumn("Cantidad", format="%d")
                 }
             )
             
@@ -129,14 +129,14 @@ if df is not None:
                     agregaciones = {'Cantidad_Total': 'sum'}
                     df_resumen = df_filtrado.groupby(columnas_agrupacion, as_index=False).agg(agregaciones)
                     
-                    # Mostrar tabla inferior limpia, con formato entero para cantidades y ordenando Código SAP como texto para que no deje espacios extraños
-                    df_resumen[cod_col] = df_resumen[cod_col].astype(str)
+                    # Limpiar código SAP para quitar los decimales .0
+                    df_resumen[cod_col] = df_resumen[cod_col].astype(str).str.replace(r'\.0$', '', regex=True)
                     
                     st.dataframe(
                         df_resumen,
                         use_container_width=True,
                         column_config={
-                            "Cantidad_Total": st.column_config.NumberColumn(format="%d"),
+                            "Cantidad_Total": st.column_config.NumberColumn("Cantidad Total", format="%d"),
                             cod_col: st.column_config.TextColumn("Código SAP")
                         }
                     )
