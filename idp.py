@@ -4,6 +4,18 @@ import os
 
 st.set_page_config(page_title="Generador de IDP", layout="wide")
 
+# Estilo visual personalizado (Encabezados en Azul Marino y Letras Blancas)
+st.markdown("""
+    <style>
+    /* Estilo para los encabezados de las tablas en Streamlit */
+    thead tr th {
+        background-color: #0b2545 !important;
+        color: white !important;
+        font-weight: bold !important;
+    }
+    </style>
+""", unsafe_allow_html=True)
+
 # Control de Acceso
 if "autenticado" not in st.session_state:
     st.session_state.autenticado = False
@@ -84,7 +96,7 @@ if df is not None:
                 df_idp['Precio Unitario'] = pd.to_numeric(df_idp['Actividad'].map(precios_dict), errors='coerce')
                 df_idp['Monto Total'] = df_idp['Precio Unitario'] * pd.to_numeric(df_idp['Cantidad'], errors='coerce')
             
-            # Mostrar tabla superior con formato correcto de moneda
+            # Mostrar tabla superior
             st.dataframe(
                 df_idp,
                 use_container_width=True,
@@ -97,6 +109,17 @@ if df is not None:
                 }
             )
             
+            # Opción para eliminar una estructura específica por su número de fila (Índice)
+            col_del1, col_del2 = st.columns([2, 1])
+            with col_del1:
+                indice_a_borrar = st.selectbox("Selecciona el número de fila (Índice) de la estructura a eliminar:", options=list(df_idp.index))
+            with col_del2:
+                st.write("") # Espaciador vertical
+                if st.button("Eliminar Fila Seleccionada"):
+                    st.session_state.lista_idp.pop(indice_a_borrar)
+                    st.success(f"Fila {indice_a_borrar} eliminada correctamente.")
+                    st.rerun()
+
             if cols_precio:
                 total_estructuras = df_idp['Monto Total'].sum()
                 st.metric(label="Monto Total de Estructuras / Actividades", value=f"${total_estructuras:,.2f}")
@@ -134,7 +157,7 @@ if df is not None:
                     # Limpiar código SAP para quitar los decimales .0
                     df_resumen[cod_col] = df_resumen[cod_col].astype(str).str.replace(r'\.0$', '', regex=True)
                     
-                    # Mostrar tabla inferior con anchos personalizados y compactos
+                    # Mostrar tabla inferior con anchos personalizados
                     config_columnas = {
                         "Cantidad_Total": st.column_config.NumberColumn("Cantidad Total", format="%d", width="small"),
                         cod_col: st.column_config.TextColumn("Código SAP", width="small"),
@@ -153,6 +176,6 @@ if df is not None:
             else:
                 st.info("No hay materiales asociados a las actividades seleccionadas.")
             
-            if st.button("Limpiar IDP"):
+            if st.button("Limpiar Todo el IDP"):
                 st.session_state.lista_idp = []
                 st.rerun()
