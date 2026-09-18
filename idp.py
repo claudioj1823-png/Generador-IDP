@@ -49,7 +49,6 @@ if df is not None:
     
     df_c = df[df['Contrata'].str.lower() == contrata_sel.lower()]
     
-    # Mapeo de actividades de forma flexible
     if not df_c.empty:
         col_desc = [c for c in df_c.columns if 'descripci' in c.lower()][0]
         mapeo = df_c[['Actividad', col_desc]].drop_duplicates().set_index('Actividad')[col_desc].to_dict()
@@ -74,9 +73,28 @@ if df is not None:
             st.success("¡Actividad añadida con éxito!")
             
         if st.session_state.lista_idp:
-            st.subheader("Resumen del IDP Actual")
+            st.subheader("Resumen del IDP Actual (Actividades)")
             df_idp = pd.DataFrame(st.session_state.lista_idp)
             st.dataframe(df_idp, use_container_width=True)
+            
+            st.subheader("Requerimiento de Materiales y Montos")
+            # Filtrar filas del Excel para las actividades agregadas y calcular materiales
+            actividades_agregadas = {item["Actividad"]: item["Cantidad"] for item in st.session_state.lista_idp}
+            
+            df_filtrado = df_c[df_c['Actividad'].isin(actividades_agregadas.keys())].copy()
+            
+            if not df_filtrado.empty:
+                # Multiplicar cantidad unitaria por la cantidad de la actividad seleccionada
+                # Buscamos columnas de cantidad y precio de materiales si existen en el Excel
+                col_cant_mat = [c for c in df_filtrado.columns if 'cant' in c.lower() and c.lower() != 'cantidad']
+                col_precio = [c for c in df_filtrado.columns if 'precio' in c.lower() or 'costo' in c.lower()]
+                
+                # Mapeamos la cantidad multiplicadora del IDP
+                df_filtrado['Cant_IDP'] = df_filtrado['Actividad'].map(actividades_agregadas)
+                
+                st.dataframe(df_filtrado, use_container_width=True)
+            else:
+                st.info("No hay materiales asociados a las actividades seleccionadas.")
             
             if st.button("Limpiar IDP"):
                 st.session_state.lista_idp = []
