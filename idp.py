@@ -35,26 +35,12 @@ def cargar_proyectos():
       os.path.dirname(__file__), "Codigos de proyectos.xlsx"
   )
   try:
-    df_proj = pd.read_excel(ruta_proj)
-    df_proj.columns = df_proj.columns.str.strip()
-    cols_cod = [c for c in df_proj.columns if "cod" in c.lower()]
-    cols_nom = [
-        c
-        for c in df_proj.columns
-        if "nom" in c.lower()
-        or "proy" in c.lower()
-        or "desc" in c.lower()
-    ]
-
-    if cols_cod and cols_nom:
-      c_cod = cols_cod[0]
-      c_nom = cols_nom[0]
-      dict_proj = pd.Series(
-          df_proj[c_nom].values, index=df_proj[c_cod]
-      ).to_dict()
-      return dict_proj
-    else:
-      return {"O-RP-24-368": "Proyecto por Defecto (Verificar Columnas)"}
+    df_proj = pd.read_excel(ruta_proj, header=0)
+    df_proj = df_proj.dropna(subset=[df_proj.columns[0]])
+    codigos = df_proj.iloc[:, 0].astype(str).str.strip()
+    nombres = df_proj.iloc[:, 1].astype(str).str.strip()
+    dict_proj = dict(zip(codigos, nombres))
+    return dict_proj
   except Exception as e:
     return {"O-RP-24-368": f"Error al cargar proyectos: {e}"}
 
@@ -104,7 +90,7 @@ if df is not None:
     lista_codigos = list(dict_proyectos.keys())
     codigo_proyecto_sel = st.selectbox("Código de Proyecto:", lista_codigos)
 
-  # CORRECCIÓN 1: Mostrar explícitamente el NOMBRE del proyecto seleccionado arriba
+  # Mostrar el nombre completo del proyecto asociado de manera limpia arriba
   nombre_proyecto_sel = dict_proyectos.get(
       codigo_proyecto_sel, "Proyecto No Encontrado"
   )
@@ -136,7 +122,7 @@ if df is not None:
       st.session_state.lista_idp.append({
           "IDP N°": idp_numero,
           "Fecha": str(fecha_idp),
-          "Código Proyecto": codigo_proyecto_sel,  # CORRECCIÓN 2: Guardamos solo el código para no repetir
+          "Código Proyecto": codigo_proyecto_sel,
           "Contratista": contrata_sel,
           "Actividad": act_sel,
           "Descripción": desc_act,
@@ -372,9 +358,7 @@ if df is not None:
             df_guardar.insert(0, "IDP N°", idp_numero)
             df_guardar.insert(1, "Fecha", str(fecha_idp))
             df_guardar.insert(2, "Código Proyecto", codigo_proyecto_sel)
-            df_guardar.insert(
-                3, "Nombre Proyecto", nombre_proyecto_sel
-            )  # En el historial guardamos el nombre completo por registro
+            df_guardar.insert(3, "Nombre Proyecto", nombre_proyecto_sel)
 
             if os.path.exists(archivo_historial):
               df_guardar.to_csv(
