@@ -94,7 +94,10 @@ if df is not None:
   nombre_proyecto_sel = dict_proyectos.get(
       codigo_proyecto_sel, "Proyecto No Encontrado"
   )
-  st.info(f"**Proyecto Seleccionado:** {nombre_proyecto_sel}")
+  st.info(
+      f"**Proyecto Seleccionado:** {nombre_proyecto_sel}  |  **IDP N°:**"
+      f" {idp_numero}  |  **Fecha:** {fecha_idp}"
+  )
 
   st.markdown("---")
 
@@ -154,7 +157,11 @@ if df is not None:
             df_idp["Cantidad"], errors="coerce"
         )
 
-      df_idp_show = df_idp.copy()
+      # Creamos una copia limpia para mostrar en pantalla sin columnas repetitivas
+      df_idp_show = df_idp[
+          ["Actividad", "Descripción", "Cantidad", "Precio Unitario", "Monto Total"]
+      ].copy()
+
       df_idp_show["Precio Unitario"] = df_idp_show["Precio Unitario"].map(
           lambda x: f"${x:,.2f}" if pd.notnull(x) else "$0.00"
       )
