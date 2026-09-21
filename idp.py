@@ -37,7 +37,6 @@ def cargar_proyectos():
   try:
     df_proj = pd.read_excel(ruta_proj)
     df_proj.columns = df_proj.columns.str.strip()
-    # Identificar columnas de código y nombre automáticamente
     cols_cod = [c for c in df_proj.columns if "cod" in c.lower()]
     cols_nom = [
         c
@@ -96,7 +95,6 @@ if df is not None:
     )
 
   with col_idp_num:
-    # Campo exclusivo de números para el IDP
     idp_numero = st.number_input("IDP N°:", min_value=1, value=1, step=1)
 
   with col_fecha:
@@ -106,7 +104,7 @@ if df is not None:
     lista_codigos = list(dict_proyectos.keys())
     codigo_proyecto_sel = st.selectbox("Código de Proyecto:", lista_codigos)
 
-  # Mostrar el nombre del proyecto asociado de manera limpia
+  # CORRECCIÓN 1: Mostrar explícitamente el NOMBRE del proyecto seleccionado arriba
   nombre_proyecto_sel = dict_proyectos.get(
       codigo_proyecto_sel, "Proyecto No Encontrado"
   )
@@ -126,7 +124,6 @@ if df is not None:
     )
     opciones = sorted(list(mapeo.keys()))
 
-    # Estructura limpia y optimizada
     col1, col2 = st.columns([4, 2])
     with col1:
       act_sel = st.selectbox("Unidad Constructiva (UU.TT.):", opciones)
@@ -139,8 +136,7 @@ if df is not None:
       st.session_state.lista_idp.append({
           "IDP N°": idp_numero,
           "Fecha": str(fecha_idp),
-          "Código Proyecto": codigo_proyecto_sel,
-          "Nombre Proyecto": nombre_proyecto_sel,
+          "Código Proyecto": codigo_proyecto_sel,  # CORRECCIÓN 2: Guardamos solo el código para no repetir
           "Contratista": contrata_sel,
           "Actividad": act_sel,
           "Descripción": desc_act,
@@ -342,7 +338,6 @@ if df is not None:
       else:
         st.info("No hay materiales asociados a las actividades seleccionadas.")
 
-      # --- SECCIÓN DE EXPORTACIÓN Y PERSISTENCIA (HISTORIAL) ---
       st.markdown("---")
       st.subheader("Exportar Resultados y Registro Histórico")
 
@@ -370,16 +365,16 @@ if df is not None:
         )
 
       with col_exp2:
-        # Botón opcional para guardar en el historial acumulado persistente (CSV)
         if st.button("💾 Guardar IDP en el Historial General"):
           archivo_historial = "historial_idp_general.csv"
           try:
-            # Añadir metadatos de cabecera a cada fila del IDP actual
             df_guardar = df_idp.copy()
             df_guardar.insert(0, "IDP N°", idp_numero)
             df_guardar.insert(1, "Fecha", str(fecha_idp))
             df_guardar.insert(2, "Código Proyecto", codigo_proyecto_sel)
-            df_guardar.insert(3, "Nombre Proyecto", nombre_proyecto_sel)
+            df_guardar.insert(
+                3, "Nombre Proyecto", nombre_proyecto_sel
+            )  # En el historial guardamos el nombre completo por registro
 
             if os.path.exists(archivo_historial):
               df_guardar.to_csv(
@@ -395,7 +390,6 @@ if df is not None:
           except Exception as e:
             st.error(f"Error al guardar en el historial: {e}")
 
-      # --- VISUALIZAR HISTORIAL ACUMULADO (Si existe) ---
       archivo_historial = "historial_idp_general.csv"
       if os.path.exists(archivo_historial):
         with st.expander("📂 Ver / Consultar Historial Consolidado de IDP"):
@@ -403,7 +397,6 @@ if df is not None:
             df_hist = pd.read_csv(archivo_historial)
             st.dataframe(df_hist, use_container_width=True)
 
-            # Botón para descargar el historial completo
             csv_hist = df_hist.to_csv(index=False).encode("utf-8")
             st.download_button(
                 label="📥 Descargar Todo el Historial en CSV",
