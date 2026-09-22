@@ -157,7 +157,6 @@ if df is not None:
             df_idp["Cantidad"], errors="coerce"
         )
 
-      # Creamos una copia limpia para mostrar en pantalla sin columnas repetitivas
       df_idp_show = df_idp[
           ["Actividad", "Descripción", "Cantidad", "Precio Unitario", "Monto Total"]
       ].copy()
@@ -169,6 +168,7 @@ if df is not None:
           lambda x: f"${x:,.2f}" if pd.notnull(x) else "$0.00"
       )
 
+      # Estilos mejorados con color de texto forzado a oscuro (#111111) para evitar conflictos en celulares
       html_est = df_idp_show.to_html(
           classes="custom-table", escape=False, index=False
       )
@@ -179,22 +179,27 @@ if df is not None:
                     border-collapse: collapse;
                     font-family: sans-serif;
                     font-size: 14px;
-                    background-color: white;
+                    background-color: white !important;
                     margin-bottom: 15px;
                 }}
-                .custom-table th, .custom-table td {{
+                .custom-table th {{
                     padding: 10px 12px;
                     border-bottom: 1px solid #e0e0e0;
                     text-align: left;
-                }}
-                .custom-table th {{
                     background-color: #0b2545 !important;
                     color: white !important;
                     font-weight: bold;
                     border: 1px solid #0b2545;
                 }}
-                .custom-table tr:hover {{
-                    background-color: #f8f9fa;
+                .custom-table td {{
+                    padding: 10px 12px;
+                    border-bottom: 1px solid #e0e0e0;
+                    text-align: left;
+                    background-color: white !important;
+                    color: #111111 !important;
+                }}
+                .custom-table tr:hover td {{
+                    background-color: #f8f9fa !important;
                 }}
                 </style>
                 {html_est}
@@ -296,6 +301,7 @@ if df is not None:
 
           df_resumen = df_resumen.rename(columns=renombres)
 
+          # Estilos idénticos forzados a texto oscuro para la tabla de materiales
           html_mat = df_resumen.to_html(
               classes="custom-table-mat", escape=False, index=False
           )
@@ -306,22 +312,27 @@ if df is not None:
                             border-collapse: collapse;
                             font-family: sans-serif;
                             font-size: 14px;
-                            background-color: white;
+                            background-color: white !important;
                             margin-bottom: 15px;
                         }}
-                        .custom-table-mat th, .custom-table-mat td {{
+                        .custom-table-mat th {{
                             padding: 10px 12px;
                             border-bottom: 1px solid #e0e0e0;
                             text-align: left;
-                        }}
-                        .custom-table-mat th {{
                             background-color: #0b2545 !important;
                             color: white !important;
                             font-weight: bold;
                             border: 1px solid #0b2545;
                         }}
-                        .custom-table-mat tr:hover {{
-                            background-color: #f8f9fa;
+                        .custom-table-mat td {{
+                            padding: 10px 12px;
+                            border-bottom: 1px solid #e0e0e0;
+                            text-align: left;
+                            background-color: white !important;
+                            color: #111111 !important;
+                        }}
+                        .custom-table-mat tr:hover td {{
+                            background-color: #f8f9fa !important;
                         }}
                         </style>
                         {html_mat}
