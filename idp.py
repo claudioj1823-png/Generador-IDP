@@ -7,19 +7,19 @@ st.set_page_config(page_title="Generador de IDP", layout="wide")
 
 # Control de Acceso
 if "autenticado" not in st.session_state:
-  st.session_state.autenticado = False
+    st.session_state.autenticado = False
 
 if not st.session_state.autenticado:
-  st.subheader("Acceso - Generador de IDP & Materiales")
-  usuario = st.text_input("Usuario")
-  password = st.text_input("Contraseña", type="password")
-  if st.button("Ingresar"):
-    if usuario == "admin" and password == "proyectos2026":
-      st.session_state.autenticado = True
-      st.rerun()
-    else:
-      st.error("Usuario o contraseña incorrectos")
-  st.stop()
+    st.subheader("Acceso - Generador de IDP & Materiales")
+    usuario = st.text_input("Usuario")
+    password = st.text_input("Contraseña", type="password")
+    if st.button("Ingresar"):
+        if usuario == "admin" and password == "proyectos2026":
+            st.session_state.autenticado = True
+            st.rerun()
+        else:
+            st.error("Usuario o contraseña incorrectos")
+    st.stop()
 
 st.title("Generador de IDP (Informe Diario de Producción)")
 st.write(
@@ -31,18 +31,18 @@ st.write(
 # --- CARGAR LISTADO DE PROYECTOS DESDE EL EXCEL EXTERNO ---
 @st.cache_data
 def cargar_proyectos():
-  ruta_proj = os.path.join(
-      os.path.dirname(__file__), "Codigos de proyectos.xlsx"
-  )
-  try:
-    df_proj = pd.read_excel(ruta_proj, header=0)
-    df_proj = df_proj.dropna(subset=[df_proj.columns[0]])
-    codigos = df_proj.iloc[:, 0].astype(str).str.strip()
-    nombres = df_proj.iloc[:, 1].astype(str).str.strip()
-    dict_proj = dict(zip(codigos, nombres))
-    return dict_proj
-  except Exception as e:
-    return {"O-RP-24-368": f"Error al cargar proyectos: {e}"}
+    ruta_proj = os.path.join(
+        os.path.dirname(__file__), "Codigos de proyectos.xlsx"
+    )
+    try:
+        df_proj = pd.read_excel(ruta_proj, header=0)
+        df_proj = df_proj.dropna(subset=[df_proj.columns[0]])
+        codigos = df_proj.iloc[:, 0].astype(str).str.strip()
+        nombres = df_proj.iloc[:, 1].astype(str).str.strip()
+        dict_proj = dict(zip(codigos, nombres))
+        return dict_proj
+    except Exception as e:
+        return {"O-RP-24-368": f"Error al cargar proyectos: {e}"}
 
 
 dict_proyectos = cargar_proyectos()
@@ -50,129 +50,128 @@ dict_proyectos = cargar_proyectos()
 
 @st.cache_data
 def cargar_datos():
-  try:
-    ruta = os.path.join(os.path.dirname(__file__), "Actividades contratistas.xlsx")
-    df = pd.read_excel(ruta, sheet_name="Actividades con materiales")
-    df.columns = df.columns.str.strip()
-    return df
-  except Exception as e:
-    st.error(f"Error al cargar el Excel de actividades: {e}")
-    return None
+    try:
+        ruta = os.path.join(os.path.dirname(__file__), "Actividades contratistas.xlsx")
+        df = pd.read_excel(ruta, sheet_name="Actividades con materiales")
+        df.columns = df.columns.str.strip()
+        return df
+    except Exception as e:
+        st.error(f"Error al cargar el Excel de actividades: {e}")
+        return None
 
 
 df = cargar_datos()
 
 if df is not None:
-  if "lista_idp" not in st.session_state:
-    st.session_state.lista_idp = []
+    if "lista_idp" not in st.session_state:
+        st.session_state.lista_idp = []
 
-  df["Actividad"] = df["Actividad"].fillna("").astype(str).str.strip()
-  df["Contrata"] = df["Contrata"].fillna("").astype(str).str.strip()
+    df["Actividad"] = df["Actividad"].fillna("").astype(str).str.strip()
+    df["Contrata"] = df["Contrata"].fillna("").astype(str).str.strip()
 
-  # --- CABECERA SUPERIOR (Contratista, IDP numérico, Fecha y Proyecto) ---
-  col_cont, col_idp_num, col_fecha, col_proj = st.columns([2, 1.2, 1.5, 2.5])
+    # --- CABECERA SUPERIOR (Contratista, IDP numérico, Fecha y Proyecto) ---
+    col_cont, col_idp_num, col_fecha, col_proj = st.columns([2, 1.2, 1.5, 2.5])
 
-  with col_cont:
-    contratas = sorted(
-        [c for c in df["Contrata"].unique() if c and c.lower() != "nan"]
+    with col_cont:
+        contratas = sorted(
+            [c for c in df["Contrata"].unique() if c and c.lower() != "nan"]
+        )
+        contrata_sel = st.selectbox(
+            "Selecciona la Compañía Contratista:", contratas
+        )
+
+    with col_idp_num:
+        idp_numero = st.number_input("IDP N°:", min_value=1, value=1, step=1)
+
+    with col_fecha:
+        fecha_idp = st.date_input("Fecha:")
+
+    with col_proj:
+        lista_codigos = list(dict_proyectos.keys())
+        codigo_proyecto_sel = st.selectbox("Código de Proyecto:", lista_codigos)
+
+    # Mostrar el nombre completo del proyecto asociado de manera limpia arriba
+    nombre_proyecto_sel = dict_proyectos.get(
+        codigo_proyecto_sel, "Proyecto No Encontrado"
     )
-    contrata_sel = st.selectbox(
-        "Selecciona la Compañía Contratista:", contratas
+    st.info(
+        f"**Proyecto Seleccionado:** {nombre_proyecto_sel}  |  **IDP N°:**"
+        f" {idp_numero}  |  **Fecha:** {fecha_idp}"
     )
 
-  with col_idp_num:
-    idp_numero = st.number_input("IDP N°:", min_value=1, value=1, step=1)
+    st.markdown("---")
 
-  with col_fecha:
-    fecha_idp = st.date_input("Fecha:")
+    df_c = df[df["Contrata"].str.lower() == contrata_sel.lower()]
 
-  with col_proj:
-    lista_codigos = list(dict_proyectos.keys())
-    codigo_proyecto_sel = st.selectbox("Código de Proyecto:", lista_codigos)
-
-  # Mostrar el nombre completo del proyecto asociado de manera limpia arriba
-  nombre_proyecto_sel = dict_proyectos.get(
-      codigo_proyecto_sel, "Proyecto No Encontrado"
-  )
-  st.info(
-      f"**Proyecto Seleccionado:** {nombre_proyecto_sel}  |  **IDP N°:**"
-      f" {idp_numero}  |  **Fecha:** {fecha_idp}"
-  )
-
-  st.markdown("---")
-
-  df_c = df[df["Contrata"].str.lower() == contrata_sel.lower()]
-
-  if not df_c.empty:
-    col_desc = [c for c in df_c.columns if "descripci" in c.lower()][0]
-    mapeo = (
-        df_c[["Actividad", col_desc]]
-        .drop_duplicates()
-        .set_index("Actividad")[col_desc]
-        .to_dict()
-    )
-    opciones = sorted(list(mapeo.keys()))
-
-    col1, col2 = st.columns([4, 2])
-    with col1:
-      act_sel = st.selectbox("Unidad Constructiva (UU.TT.):", opciones)
-    with col2:
-      cant_sel = st.number_input("Cantidad:", min_value=1, value=1)
-
-    desc_act = mapeo.get(act_sel, "")
-
-    if st.button("Añadir al IDP"):
-      st.session_state.lista_idp.append({
-          "IDP N°": idp_numero,
-          "Fecha": str(fecha_idp),
-          "Código Proyecto": codigo_proyecto_sel,
-          "Contratista": contrata_sel,
-          "Actividad": act_sel,
-          "Descripción": desc_act,
-          "Cantidad": cant_sel,
-      })
-      st.success("¡Actividad añadida con éxito!")
-
-    if st.session_state.lista_idp:
-      st.subheader("Resumen del IDP Actual (Estructuras / Actividades)")
-      df_idp = pd.DataFrame(st.session_state.lista_idp)
-
-      cols_precio = [
-          c
-          for c in df_c.columns
-          if "precio" in c.lower() or "costo" in c.lower()
-      ]
-      if cols_precio:
-        c_precio = cols_precio[0]
-        precios_dict = (
-            df_c[["Actividad", c_precio]]
+    if not df_c.empty:
+        col_desc = [c for c in df_c.columns if "descripci" in c.lower()][0]
+        mapeo = (
+            df_c[["Actividad", col_desc]]
             .drop_duplicates()
-            .set_index("Actividad")[c_precio]
+            .set_index("Actividad")[col_desc]
             .to_dict()
         )
-        df_idp["Precio Unitario"] = pd.to_numeric(
-            df_idp["Actividad"].map(precios_dict), errors="coerce"
-        )
-        df_idp["Monto Total"] = df_idp["Precio Unitario"] * pd.to_numeric(
-            df_idp["Cantidad"], errors="coerce"
-        )
+        opciones = sorted(list(mapeo.keys()))
 
-      df_idp_show = df_idp[
-          ["Actividad", "Descripción", "Cantidad", "Precio Unitario", "Monto Total"]
-      ].copy()
+        col1, col2 = st.columns([4, 2])
+        with col1:
+            act_sel = st.selectbox("Unidad Constructiva (UU.TT.):", opciones)
+        with col2:
+            cant_sel = st.number_input("Cantidad:", min_value=1, value=1)
 
-      df_idp_show["Precio Unitario"] = df_idp_show["Precio Unitario"].map(
-          lambda x: f"${x:,.2f}" if pd.notnull(x) else "$0.00"
-      )
-      df_idp_show["Monto Total"] = df_idp_show["Monto Total"].map(
-          lambda x: f"${x:,.2f}" if pd.notnull(x) else "$0.00"
-      )
+        desc_act = mapeo.get(act_sel, "")
 
-      # Estilos mejorados con color de texto forzado a oscuro (#111111) para evitar conflictos en celulares
-      html_est = df_idp_show.to_html(
-          classes="custom-table", escape=False, index=False
-      )
-      st.html(f"""
+        if st.button("Añadir al IDP"):
+            st.session_state.lista_idp.append({
+                "IDP N°": idp_numero,
+                "Fecha": str(fecha_idp),
+                "Código Proyecto": codigo_proyecto_sel,
+                "Contratista": contrata_sel,
+                "Actividad": act_sel,
+                "Descripción": desc_act,
+                "Cantidad": cant_sel,
+            })
+            st.success("¡Actividad añadida con éxito!")
+
+        if st.session_state.lista_idp:
+            st.subheader("Resumen del IDP Actual (Estructuras / Actividades)")
+            df_idp = pd.DataFrame(st.session_state.lista_idp)
+
+            cols_precio = [
+                c
+                for c in df_c.columns
+                if "precio" in c.lower() or "costo" in c.lower()
+            ]
+            if cols_precio:
+                c_precio = cols_precio[0]
+                precios_dict = (
+                    df_c[["Actividad", c_precio]]
+                    .drop_duplicates()
+                    .set_index("Actividad")[c_precio]
+                    .to_dict()
+                )
+                df_idp["Precio Unitario"] = pd.to_numeric(
+                    df_idp["Actividad"].map(precios_dict), errors="coerce"
+                )
+                df_idp["Monto Total"] = df_idp["Precio Unitario"] * pd.to_numeric(
+                    df_idp["Cantidad"], errors="coerce"
+                )
+
+            df_idp_show = df_idp[
+                ["Actividad", "Descripción", "Cantidad", "Precio Unitario", "Monto Total"]
+            ].copy()
+
+            df_idp_show["Precio Unitario"] = df_idp_show["Precio Unitario"].map(
+                lambda x: f"${x:,.2f}" if pd.notnull(x) else "$0.00"
+            )
+            df_idp_show["Monto Total"] = df_idp_show["Monto Total"].map(
+                lambda x: f"${x:,.2f}" if pd.notnull(x) else "$0.00"
+            )
+
+            html_est = df_idp_show.to_html(
+                classes="custom-table", escape=False, index=False
+            )
+            st.html(f"""
                 <style>
                 .custom-table {{
                     width: 100%;
@@ -205,293 +204,298 @@ if df is not None:
                 {html_est}
             """)
 
-      col_del1, col_del2 = st.columns([2, 1])
-      with col_del1:
-        opciones_filas = list(range(1, len(df_idp) + 1))
-        fila_a_borrar = st.selectbox(
-            "Selecciona el número de fila de la estructura a eliminar:",
-            options=opciones_filas,
-        )
-      with col_del2:
-        st.write("")
-        if st.button("Eliminar Fila Seleccionada"):
-          st.session_state.lista_idp.pop(fila_a_borrar - 1)
-          st.success(f"Fila {fila_a_borrar} eliminada correctamente.")
-          st.rerun()
+            col_del1, col_del2 = st.columns([2, 1])
+            with col_del1:
+                opciones_filas = list(range(1, len(df_idp) + 1))
+                fila_a_borrar = st.selectbox(
+                    "Selecciona el número de fila de la estructura a eliminar:",
+                    options=opciones_filas,
+                )
+            with col_del2:
+                st.write("")
+                if st.button("Eliminar Fila Seleccionada"):
+                    st.session_state.lista_idp.pop(fila_a_borrar - 1)
+                    st.success(f"Fila {fila_a_borrar} eliminada correctamente.")
+                    st.rerun()
 
-      if cols_precio:
-        total_estructuras = df_idp["Monto Total"].sum()
-        st.metric(
-            label="Monto Total de Estructuras / Actividades",
-            value=f"${total_estructuras:,.2f}",
-        )
+            if cols_precio:
+                total_estructuras = df_idp["Monto Total"].sum()
+                st.metric(
+                    label="Monto Total de Estructuras / Actividades",
+                    value=f"${total_estructuras:,.2f}",
+                )
 
-      st.subheader("Requerimiento Consolidado de Materiales")
+            st.subheader("Requerimiento Consolidado de Materiales")
 
-      df_idp_agrupado = df_idp.groupby("Actividad")["Cantidad"].sum().to_dict()
-      df_filtrado = df_c[
-          df_c["Actividad"].isin(df_idp_agrupado.keys())
-      ].copy()
+            df_idp_agrupado = df_idp.groupby("Actividad")["Cantidad"].sum().to_dict()
+            df_filtrado = df_c[
+                df_c["Actividad"].isin(df_idp_agrupado.keys())
+            ].copy()
 
-      df_resumen = pd.DataFrame()
-      if not df_filtrado.empty:
-        df_filtrado["Cant_IDP"] = df_filtrado["Actividad"].map(df_idp_agrupado)
-        col_cant_mat = [
-            c
-            for c in df_filtrado.columns
-            if "cant" in c.lower()
-            and c.lower() != "cantidad"
-            and c.lower() != "cant_idp"
-        ]
+            df_resumen = pd.DataFrame()
+            if not df_filtrado.empty:
+                df_filtrado["Cant_IDP"] = df_filtrado["Actividad"].map(df_idp_agrupado)
+                col_cant_mat = [
+                    c
+                    for c in df_filtrado.columns
+                    if "cant" in c.lower()
+                    and c.lower() != "cantidad"
+                    and c.lower() != "cant_idp"
+                ]
 
-        if col_cant_mat:
-          c_mat = col_cant_mat[0]
-          df_filtrado["Cantidad_Total"] = (
-              df_filtrado[c_mat] * df_filtrado["Cant_IDP"]
-          )
+                if col_cant_mat:
+                    c_mat = col_cant_mat[0]
+                    df_filtrado["Cantidad_Total"] = (
+                        df_filtrado[c_mat] * df_filtrado["Cant_IDP"]
+                    )
 
-          cols_cod = [
-              c
-              for c in df_filtrado.columns
-              if "sap" in c.lower() or "codigo" in c.lower()
-          ]
-          cols_desc_mat = [
-              c
-              for c in df_filtrado.columns
-              if "mat" in c.lower()
-              or "descripci_mat" in c.lower()
-              or (
-                  c.lower() != "descripción de la actividad"
-                  and "descripci" in c.lower()
-              )
-          ]
-          cols_und = [c for c in df_filtrado.columns if "unid" in c.lower()]
+                    cols_cod = [
+                        c
+                        for c in df_filtrado.columns
+                        if "sap" in c.lower() or "codigo" in c.lower()
+                    ]
+                    cols_desc_mat = [
+                        c
+                        for c in df_filtrado.columns
+                        if "mat" in c.lower()
+                        or "descripci_mat" in c.lower()
+                        or (
+                            c.lower() != "descripción de la actividad"
+                            and "descripci" in c.lower()
+                        )
+                    ]
+                    cols_und = [c for c in df_filtrado.columns if "unid" in c.lower()]
 
-          cod_col = (
-              cols_cod[0] if cols_cod else df_filtrado.columns[0]
-          )
-          desc_mat_col = cols_desc_mat[0] if cols_desc_mat else cod_col
-          und_col = cols_und[0] if cols_und else None
+                    cod_col = (
+                        cols_cod[0] if cols_cod else df_filtrado.columns[0]
+                    )
+                    desc_mat_col = cols_desc_mat[0] if cols_desc_mat else cod_col
+                    und_col = cols_und[0] if cols_und else None
 
-          columnas_agrupacion = [cod_col, desc_mat_col]
-          if und_col:
-            columnas_agrupacion.append(und_col)
+                    columnas_agrupacion = [cod_col, desc_mat_col]
+                    if und_col:
+                        columnas_agrupacion.append(und_col)
 
-          agregaciones = {"Cantidad_Total": "sum"}
-          df_resumen = df_filtrado.groupby(
-              columnas_agrupacion, as_index=False
-          ).agg(agregaciones)
+                    agregaciones = {"Cantidad_Total": "sum"}
+                    df_resumen = df_filtrado.groupby(
+                        columnas_agrupacion, as_index=False
+                    ).agg(agregaciones)
 
-          df_resumen[cod_col] = (
-              df_resumen[cod_col].astype(str).str.replace(r"\.0$", "", regex=True)
-          )
-          df_resumen["Cantidad_Total"] = (
-              pd.to_numeric(df_resumen["Cantidad_Total"], errors="coerce")
-              .fillna(0)
-              .astype(int)
-          )
+                    df_resumen[cod_col] = (
+                        df_resumen[cod_col].astype(str).str.replace(r"\.0$", "", regex=True)
+                    )
+                    df_resumen["Cantidad_Total"] = (
+                        pd.to_numeric(df_resumen["Cantidad_Total"], errors="coerce")
+                        .fillna(0)
+                        .astype(int)
+                    )
 
-          renombres = {
-              cod_col: "Código SAP",
-              desc_mat_col: "Descripción de Material",
-              "Cantidad_Total": "Cantidad Total",
-          }
-          if und_col:
-            renombres[und_col] = "Unidad"
+                    renombres = {
+                        cod_col: "Código SAP",
+                        desc_mat_col: "Descripción de Material",
+                        "Cantidad_Total": "Cantidad Total",
+                    }
+                    if und_col:
+                        renombres[und_col] = "Unidad"
 
-          df_resumen = df_resumen.rename(columns=renombres)
+                    df_resumen = df_resumen.rename(columns=renombres)
 
-          # Estilos idénticos forzados a texto oscuro para la tabla de materiales
-          html_mat = df_resumen.to_html(
-              classes="custom-table-mat", escape=False, index=False
-          )
-          st.html(f"""
-                        <style>
-                        .custom-table-mat {{
-                            width: 100%;
-                            border-collapse: collapse;
-                            font-family: sans-serif;
-                            font-size: 14px;
-                            background-color: white !important;
-                            margin-bottom: 15px;
-                        }}
-                        .custom-table-mat th {{
-                            padding: 10px 12px;
-                            border-bottom: 1px solid #e0e0e0;
-                            text-align: left;
-                            background-color: #0b2545 !important;
-                            color: white !important;
-                            font-weight: bold;
-                            border: 1px solid #0b2545;
-                        }}
-                        .custom-table-mat td {{
-                            padding: 10px 12px;
-                            border-bottom: 1px solid #e0e0e0;
-                            text-align: left;
-                            background-color: white !important;
-                            color: #111111 !important;
-                        }}
-                        .custom-table-mat tr:hover td {{
-                            background-color: #f8f9fa !important;
-                        }}
-                        </style>
-                        {html_mat}
-                    """)
-        else:
-          st.dataframe(df_filtrado, use_container_width=True)
-      else:
-        st.info("No hay materiales asociados a las actividades seleccionadas.")
-
-      st.markdown("---")
-      st.subheader("Exportar Resultados y Registro Histórico")
-
-      col_exp1, col_exp2 = st.columns([1, 1])
-
-      with col_exp1:
-        output = io.BytesIO()
-        with pd.ExcelWriter(output, engine="openpyxl") as writer:
-          df_idp.to_excel(
-              writer, sheet_name="Estructuras_Actividades", index=False
-          )
-          if not df_resumen.empty:
-            df_resumen.to_excel(
-                writer, sheet_name="Requerimiento_Materiales", index=False
-            )
-        output.seek(0)
-
-        st.download_button(
-            label="📥 Descargar IDP Completo en Excel",
-            data=output,
-            file_name=f"IDP_{idp_numero}_{contrata_sel.replace(' ', '_')}.xlsx",
-            mime=(
-                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-            ),
-        )
-
-      with col_exp2:
-        if st.button("💾 Guardar IDP en el Historial General"):
-          archivo_historial = "historial_idp_general.csv"
-          try:
-            df_guardar = df_idp.copy()
-            
-            # Aseguramos que el Monto Total vaya incluido en el historial
-            if "Monto Total" not in df_guardar.columns and cols_precio:
-              df_guardar["Monto Total"] = df_guardar["Precio Unitario"] * pd.to_numeric(df_guardar["Cantidad"], errors="coerce")
-
-            df_guardar["Fecha"] = str(fecha_idp)
-            df_guardar["Código Proyecto"] = codigo_proyecto_sel
-            df_guardar["Nombre Proyecto"] = nombre_proyecto_sel
-            df_guardar["Contratista"] = contrata_sel
-
-            cols_frente = ["IDP N°", "Fecha", "Código Proyecto", "Nombre Proyecto", "Contratista"]
-            otras_cols = [c for c in df_guardar.columns if c not in cols_frente]
-            df_guardar = df_guardar[cols_frente + otras_cols]
-
-            if os.path.exists(archivo_historial):
-              df_guardar.to_csv(
-                  archivo_historial, mode="a", header=False, index=False
-              )
+                    html_mat = df_resumen.to_html(
+                        classes="custom-table-mat", escape=False, index=False
+                    )
+                    st.html(f"""
+                                <style>
+                                .custom-table-mat {{
+                                    width: 100%;
+                                    border-collapse: collapse;
+                                    font-family: sans-serif;
+                                    font-size: 14px;
+                                    background-color: white !important;
+                                    margin-bottom: 15px;
+                                }}
+                                .custom-table-mat th {{
+                                    padding: 10px 12px;
+                                    border-bottom: 1px solid #e0e0e0;
+                                    text-align: left;
+                                    background-color: #0b2545 !important;
+                                    color: white !important;
+                                    font-weight: bold;
+                                    border: 1px solid #0b2545;
+                                }}
+                                .custom-table-mat td {{
+                                    padding: 10px 12px;
+                                    border-bottom: 1px solid #e0e0e0;
+                                    text-align: left;
+                                    background-color: white !important;
+                                    color: #111111 !important;
+                                }}
+                                .custom-table-mat tr:hover td {{
+                                    background-color: #f8f9fa !important;
+                                }}
+                                </style>
+                                {html_mat}
+                            """)
+                else:
+                    st.dataframe(df_filtrado, use_container_width=True)
             else:
-              df_guardar.to_csv(archivo_historial, index=False)
+                st.info("No hay materiales asociados a las actividades seleccionadas.")
 
-            st.success(
-                "¡IDP guardado exitosamente en el historial general de la aplicación!"
-            )
-          except Exception as e:
-            st.error(f"Error al guardar en el historial: {e}")
+            st.markdown("---")
+            st.subheader("Exportar Resultados y Registro Histórico")
 
-      archivo_historial = "historial_idp_general.csv"
-      if os.path.exists(archivo_historial):
-        with st.expander("📂 Ver / Consultar Historial Consolidado de IDP"):
-          try:
-            df_hist = pd.read_csv(archivo_historial)
-            st.dataframe(df_hist, use_container_width=True)
+            col_exp1, col_exp2 = st.columns([1, 1])
 
-            csv_hist = df_hist.to_csv(index=False).encode("utf-8")
-            st.download_button(
-                label="📥 Descargar Todo el Historial en CSV",
-                data=csv_hist,
-                file_name="Historial_Consolidado_IDP.csv",
-                mime="text/csv",
-            )
-          except Exception as e:
-            st.warning("No se pudo leer el archivo de historial aún.")
+            with col_exp1:
+                output = io.BytesIO()
+                with pd.ExcelWriter(output, engine="openpyxl") as writer:
+                    df_idp.to_excel(
+                        writer, sheet_name="Estructuras_Actividades", index=False
+                    )
+                    if not df_resumen.empty:
+                        df_resumen.to_excel(
+                            writer, sheet_name="Requerimiento_Materiales", index=False
+                        )
+                output.seek(0)
 
-      st.markdown("---")
-      if st.button("Limpiar Todo el IDP Actual"):
-        st.session_state.lista_idp = []
-        st.rerun()
+                st.download_button(
+                    label="📥 Descargar IDP Completo en Excel",
+                    data=output,
+                    file_name=f"IDP_{idp_numero}_{contrata_sel.replace(' ', '_')}.xlsx",
+                    mime=(
+                        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                    ),
+                )
+
+            with col_exp2:
+                if st.button("💾 Guardar IDP en el Historial General"):
+                    archivo_historial = "historial_idp_general.csv"
+                    try:
+                        df_guardar = df_idp.copy()
+                        
+                        if "Monto Total" not in df_guardar.columns and cols_precio:
+                            df_guardar["Monto Total"] = df_guardar["Precio Unitario"] * pd.to_numeric(df_guardar["Cantidad"], errors="coerce")
+
+                        df_guardar["Fecha"] = str(fecha_idp)
+                        df_guardar["Código Proyecto"] = codigo_proyecto_sel
+                        df_guardar["Nombre Proyecto"] = nombre_proyecto_sel
+                        df_guardar["Contratista"] = contrata_sel
+
+                        cols_frente = ["IDP N°", "Fecha", "Código Proyecto", "Nombre Proyecto", "Contratista"]
+                        otras_cols = [c for c in df_guardar.columns if c not in cols_frente]
+                        df_guardar = df_guardar[cols_frente + otras_cols]
+
+                        if os.path.exists(archivo_historial):
+                            df_guardar.to_csv(
+                                archivo_historial, mode="a", header=False, index=False
+                            )
+                        else:
+                            df_guardar.to_csv(archivo_historial, index=False)
+
+                        st.success(
+                            "¡IDP guardado exitosamente en el historial general de la aplicación!"
+                        )
+                    except Exception as e:
+                        st.error(f"Error al guardar en el historial: {e}")
+
+            archivo_historial = "historial_idp_general.csv"
+            if os.path.exists(archivo_historial):
+                with st.expander("📂 Ver / Consultar Historial Consolidado de IDP"):
+                    try:
+                        df_hist = pd.read_csv(archivo_historial)
+                        st.dataframe(df_hist, use_container_width=True)
+
+                        csv_hist = df_hist.to_csv(index=False).encode("utf-8")
+                        st.download_button(
+                            label="📥 Descargar Todo el Historial en CSV",
+                            data=csv_hist,
+                            file_name="Historial_Consolidado_IDP.csv",
+                            mime="text/csv",
+                        )
+                    except Exception as e:
+                        st.warning("No se pudo leer el archivo de historial aún.")
+
+            st.markdown("---")
+            if st.button("Limpiar Todo el IDP Actual"):
+                st.session_state.lista_idp = []
+                st.rerun()
 
 # ==========================================
 # SECCIÓN: CONSULTA RÁPIDA POR PROYECTO (SIEMPRE DISPONIBLE + MÉTRICA ACUMULADA)
 # ==========================================
 st.markdown("---")
 st.subheader("🔍 Consultar Historial Consolidado por Proyecto")
+
+# Opción de recuperación por si ocurre un reboot en Streamlit
 archivo_historial = "historial_idp_general.csv"
+archivo_subido = st.file_uploader("📂 (Opcional) Subir respaldo anterior de Historial (CSV) si hubo un reinicio de servidor", type=["csv"])
+if archivo_subido is not None:
+    try:
+        df_subido = pd.read_csv(archivo_subido)
+        df_subido.to_csv(archivo_historial, index=False)
+        st.success("¡Historial restaurado exitosamente desde tu archivo de respaldo!")
+        st.rerun()
+    except Exception as e:
+        st.error(f"No se pudo cargar el archivo subido: {e}")
 
 if os.path.exists(archivo_historial):
-  try:
-    df_hist_total = pd.read_csv(archivo_historial)
-    if "Código Proyecto" in df_hist_total.columns:
-      proyectos_guardados = df_hist_total["Código Proyecto"].dropna().unique().tolist()
-      if proyectos_guardados:
-        opciones_menu = ["-- Seleccione un proyecto para consultar --"] + proyectos_guardados
-        
-        proj_seleccionado = st.selectbox(
-            "Selecciona el Código de Proyecto a Consultar en Pantalla:",
-            opciones_menu,
-            key="filtro_proyecto_historial_global"
-        )
-        
-        if proj_seleccionado != "-- Seleccione un proyecto para consultar --":
-          df_filtrado_proj = df_hist_total[df_hist_total["Código Proyecto"] == proj_seleccionado].copy()
-          
-          # Cálculo de la suma total acumulada del proyecto
-          if "Monto Total" in df_filtrado_proj.columns:
-            df_filtrado_proj["Monto Total Num"] = pd.to_numeric(df_filtrado_proj["Monto Total"], errors="coerce").fillna(0)
-            monto_acumulado_proyecto = df_filtrado_proj["Monto Total Num"].sum()
-          else:
-            monto_acumulado_proyecto = 0
+    try:
+        df_hist_total = pd.read_csv(archivo_historial)
+        if "Código Proyecto" in df_hist_total.columns:
+            proyectos_guardados = df_hist_total["Código Proyecto"].dropna().unique().tolist()
+            if proyectos_guardados:
+                opciones_menu = ["-- Seleccione un proyecto para consultar --"] + proyectos_guardados
+                
+                proj_seleccionado = st.selectbox(
+                    "Selecciona el Código de Proyecto a Consultar en Pantalla:",
+                    opciones_menu,
+                    key="filtro_proyecto_historial_global"
+                )
+                
+                if proj_seleccionado != "-- Seleccione un proyecto para consultar --":
+                    df_filtrado_proj = df_hist_total[df_hist_total["Código Proyecto"] == proj_seleccionado].copy()
+                    
+                    if "Monto Total" in df_filtrado_proj.columns:
+                        df_filtrado_proj["Monto Total Num"] = pd.to_numeric(df_filtrado_proj["Monto Total"], errors="coerce").fillna(0)
+                        monto_acumulado_proyecto = df_filtrado_proj["Monto Total Num"].sum()
+                    else:
+                        monto_acumulado_proyecto = 0
 
-          # Formateo visual de columnas monetarias
-          if "Precio Unitario" in df_filtrado_proj.columns:
-            df_filtrado_proj["Precio Unitario"] = pd.to_numeric(df_filtrado_proj["Precio Unitario"], errors="coerce").map(
-                lambda x: f"${x:,.2f}" if pd.notnull(x) else "$0.00"
-            )
+                    if "Precio Unitario" in df_filtrado_proj.columns:
+                        df_filtrado_proj["Precio Unitario"] = pd.to_numeric(df_filtrado_proj["Precio Unitario"], errors="coerce").map(
+                            lambda x: f"${x:,.2f}" if pd.notnull(x) else "$0.00"
+                        )
 
-          if "Monto Total" in df_filtrado_proj.columns:
-            df_filtrado_proj["Monto Total"] = df_filtrado_proj["Monto Total Num"].map(
-                lambda x: f"${x:,.2f}" if pd.notnull(x) else "$0.00"
-            )
-            df_filtrado_proj = df_filtrado_proj.drop(columns=["Monto Total Num"])
+                    if "Monto Total" in df_filtrado_proj.columns:
+                        df_filtrado_proj["Monto Total"] = df_filtrado_proj["Monto Total Num"].map(
+                            lambda x: f"${x:,.2f}" if pd.notnull(x) else "$0.00"
+                        )
+                        df_filtrado_proj = df_filtrado_proj.drop(columns=["Monto Total Num"])
 
-          # Métrica gerencial con el monto total acumulado
-          st.metric(
-              label=f"💰 Monto Total Acumulado Pagado en el Proyecto ({proj_seleccionado})",
-              value=f"${monto_acumulado_proyecto:,.2f}"
-          )
+                    st.metric(
+                        label=f"💰 Monto Total Acumulado Pagado en el Proyecto ({proj_seleccionado})",
+                        value=f"${monto_acumulado_proyecto:,.2f}"
+                    )
 
-          # Ocultamos solo el Código y Nombre repetidos del proyecto para limpiar la tabla
-          columnas_a_mostrar = [c for c in df_filtrado_proj.columns if c not in ["Código Proyecto", "Nombre Proyecto"]]
+                    columnas_a_mostrar = [c for c in df_filtrado_proj.columns if c not in ["Código Proyecto", "Nombre Proyecto"]]
 
-          st.info(f"📁 Mostrando registros del proyecto seleccionado: **{proj_seleccionado}** (Total registros: {len(df_filtrado_proj)})")
-          st.dataframe(df_filtrado_proj[columnas_a_mostrar], use_container_width=True)
-          
-          csv_proj = df_filtrado_proj.to_csv(index=False).encode('utf-8')
-          st.download_button(
-              label=f"📥 Descargar Respaldo Completo de este Proyecto ({proj_seleccionado})",
-              data=csv_proj,
-              file_name=f"Respaldo_IDP_Proyecto_{proj_seleccionado}.csv",
-              mime="text/csv",
-              key="btn_dl_proj_global"
-          )
+                    st.info(f"📁 Mostrando registros del proyecto seleccionado: **{proj_seleccionado}** (Total registros: {len(df_filtrado_proj)})")
+                    st.dataframe(df_filtrado_proj[columnas_a_mostrar], use_container_width=True)
+                    
+                    csv_proj = df_filtrado_proj.to_csv(index=False).encode('utf-8')
+                    st.download_button(
+                        label=f"📥 Descargar Respaldo Completo de este Proyecto ({proj_seleccionado})",
+                        data=csv_proj,
+                        file_name=f"Respaldo_IDP_Proyecto_{proj_seleccionado}.csv",
+                        mime="text/csv",
+                        key="btn_dl_proj_global"
+                    )
+                else:
+                    st.info("💡 Selecciona un código de proyecto arriba para ver su respaldo histórico y montos totales acumulados en pantalla.")
+            else:
+                st.info("Aún no hay proyectos registrados en el historial todavía.")
         else:
-          st.info("💡 Selecciona un código de proyecto arriba para ver su respaldo histórico y montos totales acumulados en pantalla.")
-      else:
-        st.info("Aún no hay proyectos registrados en el historial todavía.")
-    else:
-      st.info("El archivo de historial no tiene la columna de proyectos.")
-  except Exception as e:
-    st.warning(f"No se pudo cargar la consulta por proyecto: {e}")
+            st.info("El archivo de historial no tiene la columna de proyectos.")
+    except Exception as e:
+        st.warning(f"No se pudo cargar la consulta por proyecto: {e}")
 else:
-  st.info("💡 Consejo para supervisores: Aún no hay registros en el historial. Tan pronto guardes el primer IDP, podrás consultar los montos totales acumulados directamente aquí al entrar a la aplicación sin necesidad de digitar nada.")
+    st.info("💡 Consejo para supervisores: Aún no hay registros en el historial. Tan pronto guardes el primer IDP, podrás consultar los montos totales acumulados directamente aquí al entrar a la aplicación sin necesidad de digitar nada.")
