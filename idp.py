@@ -90,7 +90,6 @@ if df is not None:
         lista_codigos = list(dict_proyectos.keys())
         codigo_proyecto_sel = st.selectbox("Código de Proyecto:", lista_codigos)
 
-    # Mostrar el nombre completo del proyecto asociado de manera limpia arriba
     nombre_proyecto_sel = dict_proyectos.get(
         codigo_proyecto_sel, "Proyecto No Encontrado"
     )
@@ -420,12 +419,11 @@ if df is not None:
                 st.rerun()
 
 # ==========================================
-# SECCIÓN: CONSULTA RÁPIDA POR PROYECTO (SIEMPRE DISPONIBLE + MÉTRICA ACUMULADA)
+# SECCIÓN: CONSULTA RÁPIDA POR PROYECTO (CON CÁLCULO TOTAL DE MATERIALES Y EXCEL COMPLETO)
 # ==========================================
 st.markdown("---")
 st.subheader("🔍 Consultar Historial Consolidado por Proyecto")
 
-# Opción de recuperación por si ocurre un reboot en Streamlit
 archivo_historial = "historial_idp_general.csv"
 archivo_subido = st.file_uploader("📂 (Opcional) Subir respaldo anterior de Historial (CSV) si hubo un reinicio de servidor", type=["csv"])
 if archivo_subido is not None:
@@ -469,24 +467,84 @@ if os.path.exists(archivo_historial):
                         df_filtrado_proj["Monto Total"] = df_filtrado_proj["Monto Total Num"].map(
                             lambda x: f"${x:,.2f}" if pd.notnull(x) else "$0.00"
                         )
-                        df_filtrado_proj = df_filtrado_proj.drop(columns=["Monto Total Num"])
 
                     st.metric(
                         label=f"💰 Monto Total Acumulado Pagado en el Proyecto ({proj_seleccionado})",
                         value=f"${monto_acumulado_proyecto:,.2f}"
                     )
 
-                    columnas_a_mostrar = [c for c in df_filtrado_proj.columns if c not in ["Código Proyecto", "Nombre Proyecto"]]
+                    columnas_a_mostrar = [c for c in df_filtrado_proj.columns if c not in ["Código Proyecto", "Nombre Proyecto", "Monto Total Num"]]
 
-                    st.info(f"📁 Mostrando registros del proyecto seleccionado: **{proj_seleccionado}** (Total registros: {len(df_filtrado_proj)})")
+                    st.info(f"📁 Mostrando registros de estructuras del proyecto: **{proj_seleccionado}**")
                     st.dataframe(df_filtrado_proj[columnas_a_mostrar], use_container_width=True)
-                    
-                    csv_proj = df_filtrado_proj.to_csv(index=False).encode('utf-8')
+
+                    # --- RECONSTRUCCIÓN EXACTA DE MATERIALES PARA EL PROYECTO CONSULTADO ---
+                    if "Contratista" in df_filtrado_proj.columns and "Actividad" in df_filtrado_proj.columns and "Cantidad" in df_filtrado_proj.columns:
+                        st.subheader(f"📦 Requerimiento Consolidado de Materiales para el Proyecto ({proj_seleccionado})")
+                        
+                        # Agrupar actividades y cantidades totales de todo el historial del proyecto
+                        df_proj_agrupado = df_filtrado_proj.groupby(["Contratista", "Actividad"])["Cantidad"].sum().reset_index()
+                        
+                        df_materiales_acumulado = pd.DataFrame()
+                        for _, row_g in df_proj_agrupado.iterrows():
+                            c_contratista = row_g["Contratista"]
+                            c_actividad = row_g["Actividad"]
+                            c_cant = row_g["Cantidad"]
+                            
+                            # Buscar en el Excel maestro de actividades
+                            df_match = df[(df["Contrata"].str.lower() == c_contratista.lower()) & (df["Actividad"] == c_actividad)].copy()
+                            if not df_match.empty:
+                                df_match["Cant_IDP"] = c_cant
+                                col_cant_mat = [c for c in df_match.columns if "cant" in c.lower() and c.lower() != "cantidad" and c.lower() != "cant_idp"]
+                                if col_cant_mat:
+                                    c_mat = col_cant_mat[0]
+                                    df_match["Cantidad_Total"] = df_match[c_mat] * df_match["Cant_IDP"]
+                                    df_materiales_acumulado = pd.concat([df_materiales_acumulado, df_match], ignore_index=True)
+
+                        if not df_materiales_acumulado.empty:
+                            cols_cod = [c for c in df_materiales_acumulado.columns if "sap" in c.lower() or "codigo" in c.lower()]
+                            cols_desc_mat = [c for c in df_materiales_acumulado.columns if "mat" in c.lower() or "descripci_mat" in c.lower() or (c.lower() != "descripción de la actividad" and "descripci" in c.lower())]
+                            cols_und = [c for c in df_materiales_acumulado.columns if "unid" in c.lower()]
+
+                            cod_col = cols_cod[0] if cols_cod else df_materiales_acumulado.columns[0]
+                            desc_mat_col = cols_desc_mat[0] if cols_desc_mat else cod_col
+                            und_col = cols_und[0] if cols_und else None
+
+                            cols_agrupar_mat = [cod_col, desc_mat_col]
+                            if und_col:
+                                cols_agrupar_mat.append(und_col)
+
+                            df_mat_resumen = df_materiales_acumulado.groupby(cols_agrupar_mat, as_index=False).agg({"Cantidad_Total": "sum"})
+                            df_mat_resumen[cod_col] = df_mat_resumen[cod_col].astype(str).str.replace(r"\.0$", "", regex=True)
+                            df_mat_resumen["Cantidad_Total"] = pd.to_numeric(df_mat_resumen["Cantidad_Total"], errors="coerce").fillna(0).astype(int)
+
+                            renombres_mat = {
+                                cod_col: "Código SAP",
+                                desc_mat_col: "Descripción de Material",
+                                "Cantidad_Total": "Cantidad Total"
+                            }
+                            if und_col:
+                                renombres_mat[und_col] = "Unidad"
+
+                            df_mat_resumen = df_mat_resumen.rename(columns=renombres_mat)
+                            st.dataframe(df_mat_resumen, use_container_width=True)
+                        else:
+                            df_mat_resumen = pd.DataFrame()
+                            st.info("No hay materiales asociados a los registros de este proyecto.")
+
+                    # --- DESCARGA EN EXCEL DE DOS PESTAÑAS (IGUAL QUE AL GENERAR UN IDP) ---
+                    output_proj = io.BytesIO()
+                    with pd.ExcelWriter(output_proj, engine="openpyxl") as writer:
+                        df_filtrado_proj[columnas_a_mostrar].to_excel(writer, sheet_name="Estructuras_Actividades", index=False)
+                        if 'df_mat_resumen' in locals() and not df_mat_resumen.empty:
+                            df_mat_resumen.to_excel(writer, sheet_name="Requerimiento_Materiales", index=False)
+                    output_proj.seek(0)
+
                     st.download_button(
-                        label=f"📥 Descargar Respaldo Completo de este Proyecto ({proj_seleccionado})",
-                        data=csv_proj,
-                        file_name=f"Respaldo_IDP_Proyecto_{proj_seleccionado}.csv",
-                        mime="text/csv",
+                        label=f"📥 Descargar Respaldo Completo en Excel (2 Pestañas) ({proj_seleccionado})",
+                        data=output_proj,
+                        file_name=f"Respaldo_IDP_Proyecto_{proj_seleccionado}.xlsx",
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                         key="btn_dl_proj_global"
                     )
                 else:
