@@ -67,16 +67,16 @@ if df is not None:
     if "lista_idp" not in st.session_state:
         st.session_state.lista_idp = []
 
-    # Inicializar las variables de estado para la cabecera si no existen
-    if "idp_num_input" not in st.session_state:
-        st.session_state.idp_num_input = 3507
-    if "fecha_input" not in st.session_state:
-        st.session_state.fecha_input = datetime.date.today()
+    # Inicializar estado de la cabecera para poder limpiarla dinámicamente
+    if "idp_num_val" not in st.session_state:
+        st.session_state.idp_num_val = 3507
+    if "fecha_val" not in st.session_state:
+        st.session_state.fecha_val = datetime.date.today()
 
     df["Actividad"] = df["Actividad"].fillna("").astype(str).str.strip()
     df["Contrata"] = df["Contrata"].fillna("").astype(str).str.strip()
 
-    # --- CABECERA SUPERIOR CONTROLADA POR SESSION_STATE ---
+    # --- CABECERA SUPERIOR ---
     col_cont, col_idp_num, col_fecha, col_proj = st.columns([2, 1.2, 1.5, 2.5])
 
     with col_cont:
@@ -84,22 +84,23 @@ if df is not None:
             [c for c in df["Contrata"].unique() if c and c.lower() != "nan"]
         )
         contrata_sel = st.selectbox(
-            "Selecciona la Compañía Contratista:", contratas
+            "Selecciona la Compañía Contratista:", contratas, key="widget_contrata"
         )
 
     with col_idp_num:
+        # Usamos session_state directamente para permitir modificarlo al guardar
         idp_numero = st.number_input(
-            "IDP N°:", min_value=1, value=st.session_state.idp_num_input, step=1, key="widget_idp_num"
+            "IDP N°:", min_value=0, step=1, key="idp_num_val"
         )
 
     with col_fecha:
         fecha_idp = st.date_input(
-            "Fecha:", value=st.session_state.fecha_input, key="widget_fecha"
+            "Fecha:", key="fecha_val"
         )
 
     with col_proj:
         lista_codigos = list(dict_proyectos.keys())
-        codigo_proyecto_sel = st.selectbox("Código de Proyecto:", lista_codigos)
+        codigo_proyecto_sel = st.selectbox("Código de Proyecto:", lista_codigos, key="widget_proyecto")
 
     nombre_proyecto_sel = dict_proyectos.get(
         codigo_proyecto_sel, "Proyecto No Encontrado"
@@ -401,10 +402,8 @@ if df is not None:
                         else:
                             df_guardar.to_csv(archivo_historial, index=False)
 
-                        # Limpiamos la lista actual y reseteamos el estado de los campos de cabecera
-                        st.session_state.lista_idp = []
-                        st.session_state.idp_num_input = 1  # O el valor inicial limpio que prefieras
-                        st.session_state.fecha_input = datetime.date.today()
+                        # AQUÍ SÍ SE LIMPIA LA CABECERA (IDP N° a 0) PERO SE MANTIENE LA LISTA DE ACTIVIDADES INTACTA
+                        st.session_state.idp_num_val = 0  
 
                         st.success(
                             "¡IDP guardado exitosamente en el historial general de la aplicación!"
@@ -433,6 +432,7 @@ if df is not None:
             st.markdown("---")
             if st.button("Limpiar Todo el IDP Actual"):
                 st.session_state.lista_idp = []
+                st.session_state.idp_num_val = 0
                 st.rerun()
 
 # ==========================================
