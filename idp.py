@@ -419,7 +419,7 @@ if df is not None:
                 st.rerun()
 
 # ==========================================
-# SECCIÓN: CONSULTA RÁPIDA POR PROYECTO (CON CÁLCULO TOTAL DE MATERIALES Y EXCEL COMPLETO)
+# SECCIÓN: CONSULTA RÁPIDA POR PROYECTO (CON TÍTULOS PERSONALIZADOS)
 # ==========================================
 st.markdown("---")
 st.subheader("🔍 Consultar Historial Consolidado por Proyecto")
@@ -475,14 +475,16 @@ if os.path.exists(archivo_historial):
 
                     columnas_a_mostrar = [c for c in df_filtrado_proj.columns if c not in ["Código Proyecto", "Nombre Proyecto", "Monto Total Num"]]
 
-                    st.info(f"📁 Mostrando registros de estructuras del proyecto: **{proj_seleccionado}**")
+                    # TÍTULO MODIFICADO SOLICITADO
+                    st.info(f"👷 **Mano de obra proyecto : {proj_seleccionado}**")
                     st.dataframe(df_filtrado_proj[columnas_a_mostrar], use_container_width=True)
 
                     # --- RECONSTRUCCIÓN EXACTA DE MATERIALES PARA EL PROYECTO CONSULTADO ---
                     if "Contratista" in df_filtrado_proj.columns and "Actividad" in df_filtrado_proj.columns and "Cantidad" in df_filtrado_proj.columns:
-                        st.subheader(f"📦 Requerimiento Consolidado de Materiales para el Proyecto ({proj_seleccionado})")
                         
-                        # Agrupar actividades y cantidades totales de todo el historial del proyecto
+                        # TÍTULO DE MATERIALES MODIFICADO SOLICITADO
+                        st.subheader(f"📦 Materiales para el Proyecto ({proj_seleccionado})")
+                        
                         df_proj_agrupado = df_filtrado_proj.groupby(["Contratista", "Actividad"])["Cantidad"].sum().reset_index()
                         
                         df_materiales_acumulado = pd.DataFrame()
@@ -491,7 +493,6 @@ if os.path.exists(archivo_historial):
                             c_actividad = row_g["Actividad"]
                             c_cant = row_g["Cantidad"]
                             
-                            # Buscar en el Excel maestro de actividades
                             df_match = df[(df["Contrata"].str.lower() == c_contratista.lower()) & (df["Actividad"] == c_actividad)].copy()
                             if not df_match.empty:
                                 df_match["Cant_IDP"] = c_cant
