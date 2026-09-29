@@ -374,13 +374,12 @@ if df is not None:
           try:
             df_guardar = df_idp.copy()
             
-            # Asignamos las cabeceras sin duplicar con .insert()
             df_guardar["Fecha"] = str(fecha_idp)
             df_guardar["Código Proyecto"] = codigo_proyecto_sel
             df_guardar["Nombre Proyecto"] = nombre_proyecto_sel
+            df_guardar["Contratista"] = contrata_sel
 
-            # Reordenamos columnas al frente
-            cols_frente = ["IDP N°", "Fecha", "Código Proyecto", "Nombre Proyecto"]
+            cols_frente = ["IDP N°", "Fecha", "Código Proyecto", "Nombre Proyecto", "Contratista"]
             otras_cols = [c for c in df_guardar.columns if c not in cols_frente]
             df_guardar = df_guardar[cols_frente + otras_cols]
 
@@ -415,7 +414,7 @@ if df is not None:
             st.warning("No se pudo leer el archivo de historial aún.")
 
       # ==========================================
-      # SECCIÓN: CONSULTA RÁPIDA POR PROYECTO EN PANTALLA
+      # SECCIÓN: CONSULTA RÁPIDA POR PROYECTO (Mantiene la contrata visible pero oculta el nombre/código repetido)
       # ==========================================
       st.markdown("---")
       st.subheader("🔍 Consultar Historial Consolidado por Proyecto")
@@ -425,23 +424,42 @@ if df is not None:
           if "Código Proyecto" in df_hist_total.columns:
             proyectos_guardados = df_hist_total["Código Proyecto"].dropna().unique().tolist()
             if proyectos_guardados:
+              opciones_menu = ["-- Seleccione un proyecto para consultar --"] + proyectos_guardados
+              
               proj_seleccionado = st.selectbox(
                   "Selecciona el Código de Proyecto a Consultar en Pantalla:",
-                  proyectos_guardados,
+                  opciones_menu,
                   key="filtro_proyecto_historial"
               )
-              df_filtrado_proj = df_hist_total[df_hist_total["Código Proyecto"] == proj_seleccionado]
-              st.info(f"📁 Mostrando registros guardados para el proyecto: **{proj_seleccionado}** (Total registros: {len(df_filtrado_proj)})")
-              st.dataframe(df_filtrado_proj, use_container_width=True)
               
-              csv_proj = df_filtrado_proj.to_csv(index=False).encode('utf-8')
-              st.download_button(
-                  label=f"📥 Descargar Reporte de este Proyecto ({proj_seleccionado})",
-                  data=csv_proj,
-                  file_name=f"Historial_Proyecto_{proj_seleccionado}.csv",
-                  mime="text/csv",
-                  key="btn_dl_proj"
-              )
+              if proj_seleccionado != "-- Seleccione un proyecto para consultar --":
+                df_filtrado_proj = df_hist_total[df_hist_total["Código Proyecto"] == proj_seleccionado].copy()
+                
+                # Aplicamos formato legible de dinero a las columnas numéricas
+                for col_fmt in ["Precio Unitario", "Monto Total"]:
+                  if col_fmt in df_filtrado_proj.columns:
+                    df_filtrado_proj[col_fmt] = pd.to_numeric(df_filtrado_proj[col_fmt], errors="coerce").map(
+                        lambda x: f"${x:,.2f}" if pd.notnull(x) else "$0.00"
+                    )
+
+                # Ocultamos solo el Código y Nombre del Proyecto para limpiar la vista, dejando visible la Contratista
+                columnas_a_mostrar = [c for c in df_filtrado_proj.columns if c not in ["Código Proyecto", "Nombre Proyecto"]]
+
+                st.info(f"📁 Mostrando registros del proyecto seleccionado: **{proj_seleccionado}** (Total registros: {len(df_filtrado_proj)})")
+                
+                # Mostramos la tabla manteniendo la columna de Contratista por si intervienen varias empresas
+                st.dataframe(df_filtrado_proj[columnas_a_mostrar], use_container_width=True)
+                
+                csv_proj = df_filtrado_proj.to_csv(index=False).encode('utf-8')
+                st.download_button(
+                    label=f"📥 Descargar Respaldo Completo de este Proyecto ({proj_seleccionado})",
+                    data=csv_proj,
+                    file_name=f"Respaldo_IDP_Proyecto_{proj_seleccionado}.csv",
+                    mime="text/csv",
+                    key="btn_dl_proj"
+                )
+              else:
+                st.info("💡 Selecciona un código de proyecto arriba para ver su respaldo histórico en pantalla de forma limpia.")
             else:
               st.info("Aún no hay proyectos registrados en el historial.")
           else:
