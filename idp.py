@@ -1,6 +1,5 @@
 import io
 import os
-import datetime
 import pandas as pd
 import streamlit as st
 
@@ -67,24 +66,10 @@ if df is not None:
     if "lista_idp" not in st.session_state:
         st.session_state.lista_idp = []
 
-    # Inicializar estado de la cabecera
-    if "idp_num_val" not in st.session_state:
-        st.session_state.idp_num_val = 3507
-    if "fecha_val" not in st.session_state:
-        st.session_state.fecha_val = datetime.date.today()
-
-    # Bandera para limpiar los campos en la próxima ejecución antes de que se dibujen
-    if "limpiar_cabecera" not in st.session_state:
-        st.session_state.limpiar_cabecera = False
-
-    if st.session_state.limpiar_cabecera:
-        st.session_state.idp_num_val = 0
-        st.session_state.limpiar_cabecera = False
-
     df["Actividad"] = df["Actividad"].fillna("").astype(str).str.strip()
     df["Contrata"] = df["Contrata"].fillna("").astype(str).str.strip()
 
-    # --- CABECERA SUPERIOR ---
+    # --- CABECERA SUPERIOR (Contratista, IDP numérico, Fecha y Proyecto) ---
     col_cont, col_idp_num, col_fecha, col_proj = st.columns([2, 1.2, 1.5, 2.5])
 
     with col_cont:
@@ -92,22 +77,18 @@ if df is not None:
             [c for c in df["Contrata"].unique() if c and c.lower() != "nan"]
         )
         contrata_sel = st.selectbox(
-            "Selecciona la Compañía Contratista:", contratas, key="widget_contrata"
+            "Selecciona la Compañía Contratista:", contratas
         )
 
     with col_idp_num:
-        idp_numero = st.number_input(
-            "IDP N°:", min_value=0, step=1, key="idp_num_val"
-        )
+        idp_numero = st.number_input("IDP N°:", min_value=1, value=1, step=1)
 
     with col_fecha:
-        fecha_idp = st.date_input(
-            "Fecha:", key="fecha_val"
-        )
+        fecha_idp = st.date_input("Fecha:")
 
     with col_proj:
         lista_codigos = list(dict_proyectos.keys())
-        codigo_proyecto_sel = st.selectbox("Código de Proyecto:", lista_codigos, key="widget_proyecto")
+        codigo_proyecto_sel = st.selectbox("Código de Proyecto:", lista_codigos)
 
     nombre_proyecto_sel = dict_proyectos.get(
         codigo_proyecto_sel, "Proyecto No Encontrado"
@@ -409,13 +390,9 @@ if df is not None:
                         else:
                             df_guardar.to_csv(archivo_historial, index=False)
 
-                        # Marcamos la bandera para limpiar la cabecera en el próximo rerun y NO tocamos la lista de actividades
-                        st.session_state.limpiar_cabecera = True
-
                         st.success(
                             "¡IDP guardado exitosamente en el historial general de la aplicación!"
                         )
-                        st.rerun()
                     except Exception as e:
                         st.error(f"Error al guardar en el historial: {e}")
 
@@ -439,11 +416,10 @@ if df is not None:
             st.markdown("---")
             if st.button("Limpiar Todo el IDP Actual"):
                 st.session_state.lista_idp = []
-                st.session_state.idp_num_val = 0
                 st.rerun()
 
 # ==========================================
-# SECCIÓN: CONSULTA RÁPIDA POR PROYECTO
+# SECCIÓN: CONSULTA RÁPIDA POR PROYECTO (CON TÍTULOS PERSONALIZADOS)
 # ==========================================
 st.markdown("---")
 st.subheader("🔍 Consultar Historial Consolidado por Proyecto")
@@ -499,12 +475,14 @@ if os.path.exists(archivo_historial):
 
                     columnas_a_mostrar = [c for c in df_filtrado_proj.columns if c not in ["Código Proyecto", "Nombre Proyecto", "Monto Total Num"]]
 
+                    # TÍTULO MODIFICADO SOLICITADO
                     st.info(f"👷 **Mano de obra proyecto : {proj_seleccionado}**")
                     st.dataframe(df_filtrado_proj[columnas_a_mostrar], use_container_width=True)
 
                     # --- RECONSTRUCCIÓN EXACTA DE MATERIALES PARA EL PROYECTO CONSULTADO ---
                     if "Contratista" in df_filtrado_proj.columns and "Actividad" in df_filtrado_proj.columns and "Cantidad" in df_filtrado_proj.columns:
                         
+                        # TÍTULO DE MATERIALES MODIFICADO SOLICITADO
                         st.subheader(f"📦 Materiales para el Proyecto ({proj_seleccionado})")
                         
                         df_proj_agrupado = df_filtrado_proj.groupby(["Contratista", "Actividad"])["Cantidad"].sum().reset_index()
