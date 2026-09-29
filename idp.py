@@ -69,7 +69,7 @@ if df is not None:
     df["Actividad"] = df["Actividad"].fillna("").astype(str).str.strip()
     df["Contrata"] = df["Contrata"].fillna("").astype(str).str.strip()
 
-    # --- CABECERA SUPERIOR (Contratista, IDP numérico, Fecha y Proyecto) ---
+    # --- CABECERA SUPERIOR (Contratista, IDP numérico libre, Fecha y Proyecto) ---
     col_cont, col_idp_num, col_fecha, col_proj = st.columns([2, 1.2, 1.5, 2.5])
 
     with col_cont:
@@ -81,7 +81,8 @@ if df is not None:
         )
 
     with col_idp_num:
-        idp_numero = st.number_input("IDP N°:", min_value=1, value=1, step=1)
+        # IDP numérico libre para ajustarse a cualquier talonario físico independiente
+        idp_numero = st.number_input("IDP N°:", min_value=1, value=3507, step=1)
 
     with col_fecha:
         fecha_idp = st.date_input("Fecha:")
@@ -390,9 +391,13 @@ if df is not None:
                         else:
                             df_guardar.to_csv(archivo_historial, index=False)
 
+                        # Limpiamos únicamente la lista de actividades del IDP actual
+                        st.session_state.lista_idp = []
+
                         st.success(
                             "¡IDP guardado exitosamente en el historial general de la aplicación!"
                         )
+                        st.rerun()
                     except Exception as e:
                         st.error(f"Error al guardar en el historial: {e}")
 
@@ -419,7 +424,7 @@ if df is not None:
                 st.rerun()
 
 # ==========================================
-# SECCIÓN: CONSULTA RÁPIDA POR PROYECTO (CON TÍTULOS PERSONALIZADOS)
+# SECCIÓN: CONSULTA RÁPIDA POR PROYECTO
 # ==========================================
 st.markdown("---")
 st.subheader("🔍 Consultar Historial Consolidado por Proyecto")
@@ -475,14 +480,12 @@ if os.path.exists(archivo_historial):
 
                     columnas_a_mostrar = [c for c in df_filtrado_proj.columns if c not in ["Código Proyecto", "Nombre Proyecto", "Monto Total Num"]]
 
-                    # TÍTULO MODIFICADO SOLICITADO
                     st.info(f"👷 **Mano de obra proyecto : {proj_seleccionado}**")
                     st.dataframe(df_filtrado_proj[columnas_a_mostrar], use_container_width=True)
 
                     # --- RECONSTRUCCIÓN EXACTA DE MATERIALES PARA EL PROYECTO CONSULTADO ---
                     if "Contratista" in df_filtrado_proj.columns and "Actividad" in df_filtrado_proj.columns and "Cantidad" in df_filtrado_proj.columns:
                         
-                        # TÍTULO DE MATERIALES MODIFICADO SOLICITADO
                         st.subheader(f"📦 Materiales para el Proyecto ({proj_seleccionado})")
                         
                         df_proj_agrupado = df_filtrado_proj.groupby(["Contratista", "Actividad"])["Cantidad"].sum().reset_index()
