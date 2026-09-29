@@ -373,10 +373,16 @@ if df is not None:
           archivo_historial = "historial_idp_general.csv"
           try:
             df_guardar = df_idp.copy()
-            df_guardar.insert(0, "IDP N°", idp_numero)
-            df_guardar.insert(1, "Fecha", str(fecha_idp))
-            df_guardar.insert(2, "Código Proyecto", codigo_proyecto_sel)
-            df_guardar.insert(3, "Nombre Proyecto", nombre_proyecto_sel)
+            
+            # Asignamos las cabeceras sin duplicar con .insert()
+            df_guardar["Fecha"] = str(fecha_idp)
+            df_guardar["Código Proyecto"] = codigo_proyecto_sel
+            df_guardar["Nombre Proyecto"] = nombre_proyecto_sel
+
+            # Reordenamos columnas al frente
+            cols_frente = ["IDP N°", "Fecha", "Código Proyecto", "Nombre Proyecto"]
+            otras_cols = [c for c in df_guardar.columns if c not in cols_frente]
+            df_guardar = df_guardar[cols_frente + otras_cols]
 
             if os.path.exists(archivo_historial):
               df_guardar.to_csv(
@@ -386,8 +392,7 @@ if df is not None:
               df_guardar.to_csv(archivo_historial, index=False)
 
             st.success(
-                "¡IDP guardado exitosamente en el historial general de la"
-                " aplicación!"
+                "¡IDP guardado exitosamente en el historial general de la aplicación!"
             )
           except Exception as e:
             st.error(f"Error al guardar en el historial: {e}")
@@ -408,6 +413,41 @@ if df is not None:
             )
           except Exception as e:
             st.warning("No se pudo leer el archivo de historial aún.")
+
+      # ==========================================
+      # SECCIÓN: CONSULTA RÁPIDA POR PROYECTO EN PANTALLA
+      # ==========================================
+      st.markdown("---")
+      st.subheader("🔍 Consultar Historial Consolidado por Proyecto")
+      if os.path.exists(archivo_historial):
+        try:
+          df_hist_total = pd.read_csv(archivo_historial)
+          if "Código Proyecto" in df_hist_total.columns:
+            proyectos_guardados = df_hist_total["Código Proyecto"].dropna().unique().tolist()
+            if proyectos_guardados:
+              proj_seleccionado = st.selectbox(
+                  "Selecciona el Código de Proyecto a Consultar en Pantalla:",
+                  proyectos_guardados,
+                  key="filtro_proyecto_historial"
+              )
+              df_filtrado_proj = df_hist_total[df_hist_total["Código Proyecto"] == proj_seleccionado]
+              st.info(f"📁 Mostrando registros guardados para el proyecto: **{proj_seleccionado}** (Total registros: {len(df_filtrado_proj)})")
+              st.dataframe(df_filtrado_proj, use_container_width=True)
+              
+              csv_proj = df_filtrado_proj.to_csv(index=False).encode('utf-8')
+              st.download_button(
+                  label=f"📥 Descargar Reporte de este Proyecto ({proj_seleccionado})",
+                  data=csv_proj,
+                  file_name=f"Historial_Proyecto_{proj_seleccionado}.csv",
+                  mime="text/csv",
+                  key="btn_dl_proj"
+              )
+            else:
+              st.info("Aún no hay proyectos registrados en el historial.")
+          else:
+            st.info("El archivo de historial no tiene la columna de proyectos.")
+        except Exception as e:
+          st.warning(f"No se pudo cargar la consulta por proyecto: {e}")
 
       st.markdown("---")
       if st.button("Limpiar Todo el IDP Actual"):
