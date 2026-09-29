@@ -67,11 +67,19 @@ if df is not None:
     if "lista_idp" not in st.session_state:
         st.session_state.lista_idp = []
 
-    # Inicializar estado de la cabecera para poder limpiarla dinámicamente
+    # Inicializar estado de la cabecera
     if "idp_num_val" not in st.session_state:
         st.session_state.idp_num_val = 3507
     if "fecha_val" not in st.session_state:
         st.session_state.fecha_val = datetime.date.today()
+
+    # Bandera para limpiar los campos en la próxima ejecución antes de que se dibujen
+    if "limpiar_cabecera" not in st.session_state:
+        st.session_state.limpiar_cabecera = False
+
+    if st.session_state.limpiar_cabecera:
+        st.session_state.idp_num_val = 0
+        st.session_state.limpiar_cabecera = False
 
     df["Actividad"] = df["Actividad"].fillna("").astype(str).str.strip()
     df["Contrata"] = df["Contrata"].fillna("").astype(str).str.strip()
@@ -88,7 +96,6 @@ if df is not None:
         )
 
     with col_idp_num:
-        # Usamos session_state directamente para permitir modificarlo al guardar
         idp_numero = st.number_input(
             "IDP N°:", min_value=0, step=1, key="idp_num_val"
         )
@@ -402,8 +409,8 @@ if df is not None:
                         else:
                             df_guardar.to_csv(archivo_historial, index=False)
 
-                        # AQUÍ SÍ SE LIMPIA LA CABECERA (IDP N° a 0) PERO SE MANTIENE LA LISTA DE ACTIVIDADES INTACTA
-                        st.session_state.idp_num_val = 0  
+                        # Marcamos la bandera para limpiar la cabecera en el próximo rerun y NO tocamos la lista de actividades
+                        st.session_state.limpiar_cabecera = True
 
                         st.success(
                             "¡IDP guardado exitosamente en el historial general de la aplicación!"
