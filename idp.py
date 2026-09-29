@@ -73,12 +73,19 @@ if df is not None:
     col_cont, col_idp_num, col_fecha, col_proj = st.columns([2, 1.2, 1.5, 2.5])
 
     with col_cont:
-        contratas = sorted(
+        contratas_puras = sorted(
             [c for c in df["Contrata"].unique() if c and c.lower() != "nan"]
         )
-        contrata_sel = st.selectbox(
-            "Selecciona la Compañía Contratista:", contratas
+        # Añadimos opción por defecto obligatoria para la contrata
+        opciones_contrata_menu = ["-- Seleccione la contrata --"] + contratas_puras
+        contrata_sel_menu = st.selectbox(
+            "Selecciona la Compañía Contratista:", opciones_contrata_menu
         )
+        
+        if contrata_sel_menu != "-- Seleccione la contrata --":
+            contrata_sel = contrata_sel_menu
+        else:
+            contrata_sel = None
 
     with col_idp_num:
         idp_numero = st.number_input("IDP N°:", min_value=1, value=1, step=1)
@@ -88,32 +95,29 @@ if df is not None:
 
     with col_proj:
         lista_codigos = list(dict_proyectos.keys())
-        # Añadimos la opción inicial "-- Seleccione el proyecto --" al inicio de la lista
         opciones_proyecto_menu = ["-- Seleccione el proyecto --"] + lista_codigos
-        
         proyecto_sel_menu = st.selectbox("Código de Proyecto:", opciones_proyecto_menu)
         
-        # Extraemos el código seleccionado (si no es la opción por defecto)
         if proyecto_sel_menu != "-- Seleccione el proyecto --":
             codigo_proyecto_sel = proyecto_sel_menu
         else:
             codigo_proyecto_sel = None
 
-    if codigo_proyecto_sel:
+    # Validaciones visuales del estado actual
+    if contrata_sel and codigo_proyecto_sel:
         nombre_proyecto_sel = dict_proyectos.get(
             codigo_proyecto_sel, "Proyecto No Encontrado"
         )
         st.info(
-            f"**Proyecto Seleccionado:** {nombre_proyecto_sel}  |  **IDP N°:**"
-            f" {idp_numero}  |  **Fecha:** {fecha_idp}"
+            f"**Contratista:** {contrata_sel}  |  **Proyecto Seleccionado:** {nombre_proyecto_sel}  |  **IDP N°:** {idp_numero}  |  **Fecha:** {fecha_idp}"
         )
     else:
-        st.info("💡 **Por favor, seleccione un Código de Proyecto arriba para continuar.**")
+        st.info("💡 **Por favor, seleccione tanto la Compañía Contratista como el Código de Proyecto arriba para continuar.**")
 
     st.markdown("---")
 
-    # Solo permitimos operar si ya se seleccionó un proyecto válido
-    if codigo_proyecto_sel:
+    # Solo permitimos operar si AMBOS (Contratista y Proyecto) han sido seleccionados
+    if contrata_sel and codigo_proyecto_sel:
         df_c = df[df["Contrata"].str.lower() == contrata_sel.lower()]
 
         if not df_c.empty:
@@ -543,7 +547,7 @@ if os.path.exists(archivo_historial):
                             st.dataframe(df_mat_resumen, use_container_width=True)
                         else:
                             df_mat_resumen = pd.DataFrame()
-                            st.info("No hay materiales asociados los registros de este proyecto.")
+                            st.info("No hay materiales asociados a los registros de este proyecto.")
 
                     # --- DESCARGA EN EXCEL DE DOS PESTAÑAS (IGUAL QUE AL GENERAR UN IDP) ---
                     output_proj = io.BytesIO()
