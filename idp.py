@@ -374,6 +374,10 @@ if df is not None:
           try:
             df_guardar = df_idp.copy()
             
+            # Aseguramos que el Monto Total vaya incluido en el historial
+            if "Monto Total" not in df_guardar.columns and cols_precio:
+              df_guardar["Monto Total"] = df_guardar["Precio Unitario"] * pd.to_numeric(df_guardar["Cantidad"], errors="coerce")
+
             df_guardar["Fecha"] = str(fecha_idp)
             df_guardar["Código Proyecto"] = codigo_proyecto_sel
             df_guardar["Nombre Proyecto"] = nombre_proyecto_sel
@@ -413,61 +417,81 @@ if df is not None:
           except Exception as e:
             st.warning("No se pudo leer el archivo de historial aún.")
 
-      # ==========================================
-      # SECCIÓN: CONSULTA RÁPIDA POR PROYECTO (Mantiene la contrata visible pero oculta el nombre/código repetido)
-      # ==========================================
-      st.markdown("---")
-      st.subheader("🔍 Consultar Historial Consolidado por Proyecto")
-      if os.path.exists(archivo_historial):
-        try:
-          df_hist_total = pd.read_csv(archivo_historial)
-          if "Código Proyecto" in df_hist_total.columns:
-            proyectos_guardados = df_hist_total["Código Proyecto"].dropna().unique().tolist()
-            if proyectos_guardados:
-              opciones_menu = ["-- Seleccione un proyecto para consultar --"] + proyectos_guardados
-              
-              proj_seleccionado = st.selectbox(
-                  "Selecciona el Código de Proyecto a Consultar en Pantalla:",
-                  opciones_menu,
-                  key="filtro_proyecto_historial"
-              )
-              
-              if proj_seleccionado != "-- Seleccione un proyecto para consultar --":
-                df_filtrado_proj = df_hist_total[df_hist_total["Código Proyecto"] == proj_seleccionado].copy()
-                
-                # Aplicamos formato legible de dinero a las columnas numéricas
-                for col_fmt in ["Precio Unitario", "Monto Total"]:
-                  if col_fmt in df_filtrado_proj.columns:
-                    df_filtrado_proj[col_fmt] = pd.to_numeric(df_filtrado_proj[col_fmt], errors="coerce").map(
-                        lambda x: f"${x:,.2f}" if pd.notnull(x) else "$0.00"
-                    )
-
-                # Ocultamos solo el Código y Nombre del Proyecto para limpiar la vista, dejando visible la Contratista
-                columnas_a_mostrar = [c for c in df_filtrado_proj.columns if c not in ["Código Proyecto", "Nombre Proyecto"]]
-
-                st.info(f"📁 Mostrando registros del proyecto seleccionado: **{proj_seleccionado}** (Total registros: {len(df_filtrado_proj)})")
-                
-                # Mostramos la tabla manteniendo la columna de Contratista por si intervienen varias empresas
-                st.dataframe(df_filtrado_proj[columnas_a_mostrar], use_container_width=True)
-                
-                csv_proj = df_filtrado_proj.to_csv(index=False).encode('utf-8')
-                st.download_button(
-                    label=f"📥 Descargar Respaldo Completo de este Proyecto ({proj_seleccionado})",
-                    data=csv_proj,
-                    file_name=f"Respaldo_IDP_Proyecto_{proj_seleccionado}.csv",
-                    mime="text/csv",
-                    key="btn_dl_proj"
-                )
-              else:
-                st.info("💡 Selecciona un código de proyecto arriba para ver su respaldo histórico en pantalla de forma limpia.")
-            else:
-              st.info("Aún no hay proyectos registrados en el historial.")
-          else:
-            st.info("El archivo de historial no tiene la columna de proyectos.")
-        except Exception as e:
-          st.warning(f"No se pudo cargar la consulta por proyecto: {e}")
-
       st.markdown("---")
       if st.button("Limpiar Todo el IDP Actual"):
         st.session_state.lista_idp = []
         st.rerun()
+
+# ==========================================
+# SECCIÓN: CONSULTA RÁPIDA POR PROYECTO (SIEMPRE DISPONIBLE + MÉTRICA ACUMULADA)
+# ==========================================
+st.markdown("---")
+st.subheader("🔍 Consultar Historial Consolidado por Proyecto")
+archivo_historial = "historial_idp_general.csv"
+
+if os.path.exists(archivo_historial):
+  try:
+    df_hist_total = pd.read_csv(archivo_historial)
+    if "Código Proyecto" in df_hist_total.columns:
+      proyectos_guardados = df_hist_total["Código Proyecto"].dropna().unique().tolist()
+      if proyectos_guardados:
+        opciones_menu = ["-- Seleccione un proyecto para consultar --"] + proyectos_guardados
+        
+        proj_seleccionado = st.selectbox(
+            "Selecciona el Código de Proyecto a Consultar en Pantalla:",
+            opciones_menu,
+            key="filtro_proyecto_historial_global"
+        )
+        
+        if proj_seleccionado != "-- Seleccione un proyecto para consultar --":
+          df_filtrado_proj = df_hist_total[df_hist_total["Código Proyecto"] == proj_seleccionado].copy()
+          
+          # Cálculo de la suma total acumulada del proyecto
+          if "Monto Total" in df_filtrado_proj.columns:
+            df_filtrado_proj["Monto Total Num"] = pd.to_numeric(df_filtrado_proj["Monto Total"], errors="coerce").fillna(0)
+            monto_acumulado_proyecto = df_filtrado_proj["Monto Total Num"].sum()
+          else:
+            monto_acumulado_proyecto = 0
+
+          # Formateo visual de columnas monetarias
+          if "Precio Unitario" in df_filtrado_proj.columns:
+            df_filtrado_proj["Precio Unitario"] = pd.to_numeric(df_filtrado_proj["Precio Unitario"], errors="coerce").map(
+                lambda x: f"${x:,.2f}" if pd.notnull(x) else "$0.00"
+            )
+
+          if "Monto Total" in df_filtrado_proj.columns:
+            df_filtrado_proj["Monto Total"] = df_filtrado_proj["Monto Total Num"].map(
+                lambda x: f"${x:,.2f}" if pd.notnull(x) else "$0.00"
+            )
+            df_filtrado_proj = df_filtrado_proj.drop(columns=["Monto Total Num"])
+
+          # Métrica gerencial con el monto total acumulado
+          st.metric(
+              label=f"💰 Monto Total Acumulado Pagado en el Proyecto ({proj_seleccionado})",
+              value=f"${monto_acumulado_proyecto:,.2f}"
+          )
+
+          # Ocultamos solo el Código y Nombre repetidos del proyecto para limpiar la tabla
+          columnas_a_mostrar = [c for c in df_filtrado_proj.columns if c not in ["Código Proyecto", "Nombre Proyecto"]]
+
+          st.info(f"📁 Mostrando registros del proyecto seleccionado: **{proj_seleccionado}** (Total registros: {len(df_filtrado_proj)})")
+          st.dataframe(df_filtrado_proj[columnas_a_mostrar], use_container_width=True)
+          
+          csv_proj = df_filtrado_proj.to_csv(index=False).encode('utf-8')
+          st.download_button(
+              label=f"📥 Descargar Respaldo Completo de este Proyecto ({proj_seleccionado})",
+              data=csv_proj,
+              file_name=f"Respaldo_IDP_Proyecto_{proj_seleccionado}.csv",
+              mime="text/csv",
+              key="btn_dl_proj_global"
+          )
+        else:
+          st.info("💡 Selecciona un código de proyecto arriba para ver su respaldo histórico y montos totales acumulados en pantalla.")
+      else:
+        st.info("Aún no hay proyectos registrados en el historial todavía.")
+    else:
+      st.info("El archivo de historial no tiene la columna de proyectos.")
+  except Exception as e:
+    st.warning(f"No se pudo cargar la consulta por proyecto: {e}")
+else:
+  st.info("💡 Consejo para supervisores: Aún no hay registros en el historial. Tan pronto guardes el primer IDP, podrás consultar los montos totales acumulados directamente aquí al entrar a la aplicación sin necesidad de digitar nada.")
