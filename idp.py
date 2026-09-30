@@ -454,14 +454,38 @@ if os.path.exists(archivo_historial):
     try:
         df_hist_total = pd.read_csv(archivo_historial)
         
-        # --- LIMPIEZA ROBUSTA DE PRECIOS EN EL HISTORIAL GENERAL ---
-        if "Precio Unitario" in df_hist_total.columns:
-            df_hist_total["Precio Unitario"] = (
-                df_hist_total["Precio Unitario"]
-                .astype(str)
-                .str.replace(r"[$,]", "", regex=True)
-            )
-            df_hist_total["Precio Unitario"] = pd.to_numeric(df_hist_total["Precio Unitario"], errors="coerce").fillna(0)
+        # =========================================================================
+        # REPARACIÓN AUTOMÁTICA Y BLINDAJE DE PRECIOS DESDE EL EXCEL ORIGINAL
+        # =========================================================================
+        cols_p_excel = [c for c in df.columns if "precio" in c.lower() or "costo" in c.lower()]
+        if cols_p_excel:
+            col_p_nom = cols_p_excel[0]
+            # Crear un diccionario maestro rápido: (Contrata_lower, Actividad_lower) -> Precio_Real
+            dict_tarifas_maestro = {}
+            for _, r_t in df.iterrows():
+                c_cont_m = str(r_t.get("Contrata", "")).strip().lower()
+                c_act_m = str(r_t.get("Actividad", "")).strip().lower()
+                val_pr = pd.to_numeric(str(r_t.get(col_p_nom, 0)).replace("$", "").replace(",", ""), errors="coerce") or 0.0
+                dict_tarifas_maestro[(c_cont_m, c_act_m)] = val_pr
+
+            # Aplicar corrección sobre todo el historial leído para asegurar que ningún precio sea 0 si existe tarifa
+            precios_reparados = []
+            for _, row_h in df_hist_total.iterrows():
+                # Detectar nombre de columna de actividad y contrata en el CSV
+                act_val = str(row_h.get("Actividad", row_h.get("Código", ""))).strip().lower()
+                cont_val = str(row_h.get("Contratista", row_h.get("Contrata", ""))).strip().lower()
+                
+                # Precio actual en el historial
+                p_actual_raw = row_h.get("Precio Unitario", row_h.get("Costo Unitario", 0))
+                p_actual = pd.to_numeric(str(p_actual_raw).replace("$", "").replace(",", ""), errors="coerce") or 0.0
+                
+                if p_actual == 0.0:
+                    # Buscar en el maestro del Excel
+                    p_actual = dict_tarifas_maestro.get((cont_val, act_val), 0.0)
+                
+                precios_reparados.append(p_actual)
+            
+            df_hist_total["Precio Unitario"] = precios_reparados
         else:
             df_hist_total["Precio Unitario"] = 0.0
 
@@ -590,8 +614,6 @@ if os.path.exists(archivo_historial):
                     with st.expander("✏ Modificar mano de obra"):
                         st.info("💡 Haz doble clic sobre cualquier celda de la tabla de abajo para corregir la cantidad, el número de IDP, la fecha, la contrata o el código de proyecto. Al terminar, haz clic en **'Guardar Cambios en el Historial'**.")
                         
-                        df_filtrado_proj["_index_real"] = df_filtrado_proj.index
-                        
                         df_editado_en_pantalla = st.data_editor(
                             df_proj_fmt[cols_a_mostrar_proj + ["Código Proyecto", "Nombre Proyecto"]],
                             use_container_width=True,
@@ -609,22 +631,15 @@ if os.path.exists(archivo_historial):
                                 cants_num = pd.to_numeric(df_limpio["Cantidad"], errors="coerce").fillna(0)
                                 df_limpio["Cantidad"] = cants_num
                                 
-                                # 2. Recuperar y recalcular los costos unitarios reales desde el Excel principal de tarifas
+                                # 2. Recuperar y recalcular los costos unitarios reales desde el diccionario maestro del Excel
                                 costos_actualizados = []
                                 for _, row_ed in df_limpio.iterrows():
-                                    c_act = str(row_ed.get("Código", "")).strip()
-                                    c_cont = str(row_ed.get("Contrata", "")).strip()
+                                    c_act = str(row_ed.get("Código", "")).strip().lower()
+                                    c_cont = str(row_ed.get("Contrata", "")).strip().lower()
                                     
-                                    # Buscar precio en el DataFrame original de actividades/tarifas
-                                    df_tarifa_match = df[(df["Contrata"].str.lower() == c_cont.lower()) & (df["Actividad"] == c_act)]
-                                    cols_p = [c for c in df.columns if "precio" in c.lower() or "costo" in c.lower()]
-                                    
-                                    precio_encontrado = 0.0
-                                    if not df_tarifa_match.empty and cols_p:
-                                        val_p = df_tarifa_match.iloc[0][cols_p[0]]
-                                        precio_encontrado = pd.to_numeric(str(val_p).replace("$", "").replace(",", ""), errors="coerce") or 0.0
-                                    else:
-                                        # Si no se encuentra en el Excel, intentar limpiar el que venía en pantalla por si acaso
+                                    # Buscar precio en el diccionario maestro o respaldo de pantalla
+                                    precio_encontrado = dict_tarifas_maestro.get((c_cont, c_act), 0.0)
+                                    if precio_encontrado == 0.0:
                                         val_pantalla = str(row_ed.get("Costo Unitario", "0")).replace("$", "").replace(",", "")
                                         precio_encontrado = pd.to_numeric(val_pantalla, errors="coerce") or 0.0
                                         
