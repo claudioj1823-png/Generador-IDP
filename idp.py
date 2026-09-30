@@ -76,7 +76,6 @@ if df is not None:
         contratas_puras = sorted(
             [c for c in df["Contrata"].unique() if c and c.lower() != "nan"]
         )
-        # Añadimos opción por defecto obligatoria para la contrata
         opciones_contrata_menu = ["-- Seleccione la contrata --"] + contratas_puras
         contrata_sel_menu = st.selectbox(
             "Selecciona la Compañía Contratista:", opciones_contrata_menu
@@ -103,7 +102,6 @@ if df is not None:
         else:
             codigo_proyecto_sel = None
 
-    # Validaciones visuales del estado actual
     if contrata_sel and codigo_proyecto_sel:
         nombre_proyecto_sel = dict_proyectos.get(
             codigo_proyecto_sel, "Proyecto No Encontrado"
@@ -116,7 +114,6 @@ if df is not None:
 
     st.markdown("---")
 
-    # Solo permitimos operar si AMBOS (Contratista y Proyecto) han sido seleccionados
     if contrata_sel and codigo_proyecto_sel:
         df_c = df[df["Contrata"].str.lower() == contrata_sel.lower()]
 
@@ -456,6 +453,35 @@ if archivo_subido is not None:
 if os.path.exists(archivo_historial):
     try:
         df_hist_total = pd.read_csv(archivo_historial)
+        
+        # --- FUNCIÓN AUXILIAR PARA FORMATEAR LAS COLUMNAS AL ESTILO SOLICITADO ---
+        def formatear_columnas_tabla(df_in):
+            df_fmt = df_in.copy()
+            # Mapeo y orden de columnas exacto: Código, DETALLE, Costo Unitario, Cantidad, Costo Total, IDP, Fec, Contrata, Código Proyecto, Nombre Proyecto
+            renombres_map = {
+                "Actividad": "Código",
+                "Descripción": "DETALLE",
+                "Precio Unitario": "Costo Unitario",
+                "Cantidad": "Cantidad",
+                "Monto Total": "Costo Total",
+                "IDP N°": "IDP",
+                "Fecha": "Fec",
+                "Contratista": "Contrata",
+                "Código Proyecto": "Código Proyecto",
+                "Nombre Proyecto": "Nombre Proyecto"
+            }
+            df_fmt = df_fmt.rename(columns=renombres_map)
+            
+            # Orden estricto deseado
+            orden_columnas = ["Código", "DETALLE", "Costo Unitario", "Cantidad", "Costo Total", "IDP", "Fec", "Contrata", "Código Proyecto", "Nombre Proyecto"]
+            # Seleccionamos solo las que existan en el dataframe
+            cols_existentes = [c for c in orden_columnas if c in df_fmt.columns]
+            # Añadimos cualquier otra columna remanente por si acaso
+            otras = [c for c in df_fmt.columns if c not in cols_existentes and c != "Monto Total Num"]
+            
+            df_fmt = df_fmt[cols_existentes + otras]
+            return df_fmt
+
         if "Código Proyecto" in df_hist_total.columns:
             proyectos_guardados = df_hist_total["Código Proyecto"].dropna().unique().tolist()
             if proyectos_guardados:
@@ -467,6 +493,67 @@ if os.path.exists(archivo_historial):
                     key="filtro_proyecto_historial_global"
                 )
                 
+                # --- BOTÓN DE DESCARGA MAESTRA DE TODOS LOS PROYECTOS ---
+                col_down_gen1, col_down_gen2 = st.columns([2, 2])
+                with col_down_gen1:
+                    output_todos = io.BytesIO()
+                    with pd.ExcelWriter(output_todos, engine="openpyxl") as writer:
+                        df_hist_fmt_global = formatear_columnas_tabla(df_hist_total)
+                        df_hist_fmt_global.to_excel(writer, sheet_name="Historial_Estructuras", index=False)
+                        
+                        # Generar también el consolidado total de materiales de todos los proyectos
+                        if not df.empty and "Contratista" in df_hist_total.columns and "Actividad" in df_hist_total.columns and "Cantidad" in df_hist_total.columns:
+                            df_all_agrupado = df_hist_total.groupby(["Contratista", "Actividad"])["Cantidad"].sum().reset_index()
+                            df_mat_todos_acc = pd.DataFrame()
+                            for _, row_g in df_all_agrupado.iterrows():
+                                c_contratista = row_g["Contratista"]
+                                c_actividad = row_g["Actividad"]
+                                c_cant = row_g["Cantidad"]
+                                df_match = df[(df["Contrata"].str.lower() == c_contratista.lower()) & (df["Actividad"] == c_actividad)].copy()
+                                if not df_match.empty:
+                                    df_match["Cant_IDP"] = c_cant
+                                    col_cant_mat = [c for c in df_match.columns if "cant" in c.lower() and c.lower() != "cantidad" and c.lower() != "cant_idp"]
+                                    if col_cant_mat:
+                                        c_mat = col_cant_mat[0]
+                                        df_match["Cantidad_Total"] = df_match[c_mat] * df_match["Cant_IDP"]
+                                        df_mat_todos_acc = pd.concat([df_mat_todos_acc, df_match], ignore_index=True)
+                            
+                            if not df_mat_todos_acc.empty:
+                                cols_cod = [c for c in df_mat_todos_acc.columns if "sap" in c.lower() or "codigo" in c.lower()]
+                                cols_desc_mat = [c for c in df_mat_todos_acc.columns if "mat" in c.lower() or "descripci_mat" in c.lower() or (c.lower() != "descripción de la actividad" and "descripci" in c.lower())]
+                                cols_und = [c for c in df_mat_todos_acc.columns if "unid" in c.lower()]
+
+                                cod_col = cols_cod[0] if cols_cod else df_mat_todos_acc.columns[0]
+                                desc_mat_col = cols_desc_mat[0] if cols_desc_mat else cod_col
+                                und_col = cols_und[0] if cols_und else None
+
+                                cols_agrupar_mat = [cod_col, desc_mat_col]
+                                if und_col:
+                                    cols_agrupar_mat.append(und_col)
+
+                                df_mat_resumen_all = df_mat_todos_acc.groupby(cols_agrupar_mat, as_index=False).agg({"Cantidad_Total": "sum"})
+                                df_mat_resumen_all[cod_col] = df_mat_resumen_all[cod_col].astype(str).str.replace(r"\.0$", "", regex=True)
+                                df_mat_resumen_all["Cantidad_Total"] = pd.to_numeric(df_mat_resumen_all["Cantidad_Total"], errors="coerce").fillna(0).astype(int)
+
+                                renombres_mat = {
+                                    cod_col: "Código SAP",
+                                    desc_mat_col: "Descripción de Material",
+                                    "Cantidad_Total": "Cantidad Total"
+                                }
+                                if und_col:
+                                    renombres_mat[und_col] = "Unidad"
+                                df_mat_resumen_all = df_mat_resumen_all.rename(columns=renombres_mat)
+                                df_mat_resumen_all.to_excel(writer, sheet_name="Requerimiento_Materiales_General", index=False)
+                    output_todos.seek(0)
+
+                    st.download_button(
+                        label="📥 Descargar Reporte Maestro General (Todos los Proyectos)",
+                        data=output_todos,
+                        file_name="Reporte_General_Consolidado_IDP.xlsx",
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        key="btn_descargar_maestro_todos"
+                    )
+
                 if proj_seleccionado != "-- Seleccione el proyecto --":
                     df_filtrado_proj = df_hist_total[df_hist_total["Código Proyecto"] == proj_seleccionado].copy()
                     
@@ -491,10 +578,12 @@ if os.path.exists(archivo_historial):
                         value=f"${monto_acumulado_proyecto:,.2f}"
                     )
 
-                    columnas_a_mostrar = [c for c in df_filtrado_proj.columns if c not in ["Código Proyecto", "Nombre Proyecto", "Monto Total Num"]]
+                    # Aplicar formato de columnas limpio y profesional
+                    df_proj_fmt = formatear_columnas_tabla(df_filtrado_proj)
+                    cols_a_mostrar_proj = [c for c in df_proj_fmt.columns if c not in ["Código Proyecto", "Nombre Proyecto", "Monto Total Num"]]
 
                     st.info(f"👷 **Mano de obra proyecto : {proj_seleccionado}**")
-                    st.dataframe(df_filtrado_proj[columnas_a_mostrar], use_container_width=True)
+                    st.dataframe(df_proj_fmt[cols_a_mostrar_proj], use_container_width=True)
 
                     # --- RECONSTRUCCIÓN EXACTA DE MATERIALES PARA EL PROYECTO CONSULTADO ---
                     if "Contratista" in df_filtrado_proj.columns and "Actividad" in df_filtrado_proj.columns and "Cantidad" in df_filtrado_proj.columns:
@@ -549,10 +638,10 @@ if os.path.exists(archivo_historial):
                             df_mat_resumen = pd.DataFrame()
                             st.info("No hay materiales asociados a los registros de este proyecto.")
 
-                    # --- DESCARGA EN EXCEL DE DOS PESTAÑAS (IGUAL QUE AL GENERAR UN IDP) ---
+                    # --- DESCARGA EN EXCEL DE DOS PESTAÑAS (PARA EL PROYECTO SELECCIONADO) ---
                     output_proj = io.BytesIO()
                     with pd.ExcelWriter(output_proj, engine="openpyxl") as writer:
-                        df_filtrado_proj[columnas_a_mostrar].to_excel(writer, sheet_name="Estructuras_Actividades", index=False)
+                        df_proj_fmt[cols_a_mostrar_proj].to_excel(writer, sheet_name="Estructuras_Actividades", index=False)
                         if 'df_mat_resumen' in locals() and not df_mat_resumen.empty:
                             df_mat_resumen.to_excel(writer, sheet_name="Requerimiento_Materiales", index=False)
                     output_proj.seek(0)
@@ -565,7 +654,7 @@ if os.path.exists(archivo_historial):
                         key="btn_dl_proj_global"
                     )
                 else:
-                    st.info("💡 Selecciona un código de proyecto arriba para ver su respaldo histórico y montos totales acumulados en pantalla.")
+                    st.info("💡 Selecciona un código de proyecto arriba para ver su respaldo histórico y montos totales acumulados en pantalla, o haz clic en el botón de descarga general.")
             else:
                 st.info("Aún no hay proyectos registrados en el historial todavía.")
         else:
