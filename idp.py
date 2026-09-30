@@ -434,7 +434,7 @@ if df is not None:
                     st.rerun()
 
 # ==========================================
-# SECCIÓN: CONSULTA RÁPIDA POR PROYECTO
+# SECCIÓN: CONSULTA RÁPIDA POR PROYECTO & EDICIÓN FLEXIBLE
 # ==========================================
 st.markdown("---")
 st.subheader("🔍 Consultar Historial Consolidado por Proyecto")
@@ -454,10 +454,8 @@ if os.path.exists(archivo_historial):
     try:
         df_hist_total = pd.read_csv(archivo_historial)
         
-        # --- FUNCIÓN AUXILIAR PARA FORMATEAR LAS COLUMNAS AL ESTILO SOLICITADO ---
         def formatear_columnas_tabla(df_in):
             df_fmt = df_in.copy()
-            # Mapeo y orden de columnas exacto: Código, DETALLE, Costo Unitario, Cantidad, Costo Total, IDP, Fec, Contrata, Código Proyecto, Nombre Proyecto
             renombres_map = {
                 "Actividad": "Código",
                 "Descripción": "DETALLE",
@@ -471,14 +469,9 @@ if os.path.exists(archivo_historial):
                 "Nombre Proyecto": "Nombre Proyecto"
             }
             df_fmt = df_fmt.rename(columns=renombres_map)
-            
-            # Orden estricto deseado
             orden_columnas = ["Código", "DETALLE", "Costo Unitario", "Cantidad", "Costo Total", "IDP", "Fec", "Contrata", "Código Proyecto", "Nombre Proyecto"]
-            # Seleccionamos solo las que existan en el dataframe
             cols_existentes = [c for c in orden_columnas if c in df_fmt.columns]
-            # Añadimos cualquier otra columna remanente por si acaso
             otras = [c for c in df_fmt.columns if c not in cols_existentes and c != "Monto Total Num"]
-            
             df_fmt = df_fmt[cols_existentes + otras]
             return df_fmt
 
@@ -501,7 +494,6 @@ if os.path.exists(archivo_historial):
                         df_hist_fmt_global = formatear_columnas_tabla(df_hist_total)
                         df_hist_fmt_global.to_excel(writer, sheet_name="Historial_Estructuras", index=False)
                         
-                        # Generar también el consolidado total de materiales de todos los proyectos
                         if not df.empty and "Contratista" in df_hist_total.columns and "Actividad" in df_hist_total.columns and "Cantidad" in df_hist_total.columns:
                             df_all_agrupado = df_hist_total.groupby(["Contratista", "Actividad"])["Cantidad"].sum().reset_index()
                             df_mat_todos_acc = pd.DataFrame()
@@ -573,17 +565,63 @@ if os.path.exists(archivo_historial):
                             lambda x: f"${x:,.2f}" if pd.notnull(x) else "$0.00"
                         )
 
-                    st.metric(
-                        label=f"💰 Monto Total Acumulado Pagado en el Proyecto ({proj_seleccionado})",
-                        value=f"${monto_acumulado_proyecto:,.2f}"
-                    )
-
-                    # Aplicar formato de columnas limpio y profesional
                     df_proj_fmt = formatear_columnas_tabla(df_filtrado_proj)
                     cols_a_mostrar_proj = [c for c in df_proj_fmt.columns if c not in ["Código Proyecto", "Nombre Proyecto", "Monto Total Num"]]
 
                     st.info(f"👷 **Mano de obra proyecto : {proj_seleccionado}**")
                     st.dataframe(df_proj_fmt[cols_a_mostrar_proj], use_container_width=True)
+
+                    # ==========================================
+                    # EDICIÓN FLEXIBLE CON st.data_editor
+                    # ==========================================
+                    with st.expander("✏️ Editor Flexible de Registros (Modificar o Corregir Directamente en Pantalla)"):
+                        st.info("💡 Haz doble clic sobre cualquier celda de la tabla de abajo para corregir la cantidad, el número de IDP, la fecha, la contrata o el código de proyecto. Al terminar, haz clic en **'Guardar Cambios en el Historial'**.")
+                        
+                        # Mantenemos los índices originales en una columna auxiliar para poder sincronizar al guardar
+                        df_filtrado_proj["_index_real"] = df_filtrado_proj.index
+                        
+                        # Mostramos el editor interactivo
+                        df_editado_en_pantalla = st.data_editor(
+                            df_filtrado_proj.drop(columns=["Monto Total Num"], errors="ignore"),
+                            use_container_width=True,
+                            key=f"editor_{proj_seleccionado}",
+                            num_rows="dynamic"  # Permite también añadir o borrar filas si se requiere
+                        )
+                        
+                        if st.button("💾 Guardar Cambios en el Historial General", key=f"btn_save_editor_{proj_seleccionado}"):
+                            try:
+                                # Reconstruimos el df_hist_total combinando los cambios realizados en este proyecto
+                                # y manteniendo intactos los demás proyectos que no se estaban editando
+                                df_otros_proyectos = df_hist_total[df_hist_total["Código Proyecto"] != proj_seleccionado]
+                                
+                                # Limpiamos la columna auxiliar de índices antes de guardar
+                                df_limpio = df_editado_en_pantalla.drop(columns=["_index_real"], errors="ignore")
+                                
+                                # Recalcular Montos Totales si se modificaron cantidades o costos unitarios
+                                if "Cantidad" in df_limpio.columns and "Costo Unitario" in df_limpio.columns:
+                                    # Limpiamos el símbolo de dólar si lo tuviera el costo unitario
+                                    costos_num = pd.to_numeric(df_limpio["Costo Unitario"].astype(str).str.replace("$", "").str.replace(",", ""), errors="coerce").fillna(0)
+                                    cants_num = pd.to_numeric(df_limpio["Cantidad"], errors="coerce").fillna(0)
+                                    df_limpio["Monto Total"] = costos_num * cants_num
+                                    # Renombramos de vuelta a los nombres internos estándar del CSV
+                                    df_limpio = df_limpio.rename(columns={
+                                        "Código": "Actividad",
+                                        "DETALLE": "Descripción",
+                                        "Costo Unitario": "Precio Unitario",
+                                        "Costo Total": "Monto Total",
+                                        "IDP": "IDP N°",
+                                        "Fec": "Fecha",
+                                        "Contrata": "Contratista"
+                                    })
+                                
+                                # Combinamos y guardamos el archivo completo
+                                df_final_actualizado = pd.concat([df_otros_proyectos, df_limpio], ignore_index=True)
+                                df_final_actualizado.to_csv(archivo_historial, index=False)
+                                
+                                st.success("¡Todos los cambios se han guardado exitosamente en el historial general! Recargando...")
+                                st.rerun()
+                            except Exception as e:
+                                st.error(f"Error al guardar los cambios: {e}")
 
                     # --- RECONSTRUCCIÓN EXACTA DE MATERIALES PARA EL PROYECTO CONSULTADO ---
                     if "Contratista" in df_filtrado_proj.columns and "Actividad" in df_filtrado_proj.columns and "Cantidad" in df_filtrado_proj.columns:
