@@ -396,7 +396,7 @@ if df is not None:
 
                             cols_frente = ["IDP N°", "Fecha", "Código Proyecto", "Nombre Proyecto", "Contratista"]
                             otras_cols = [c for c in df_guardar.columns if c not in cols_frente]
-                            df_guardar = df_guardar[cols_frente + otras_cols]
+                            df_guardar = df_guardar[cols_frente + outras_cols]
 
                             if os.path.exists(archivo_historial):
                                 df_guardar.to_csv(
@@ -454,7 +454,13 @@ if os.path.exists(archivo_historial):
     try:
         df_hist_total = pd.read_csv(archivo_historial)
         
+        # --- LIMPIEZA ROBUSTA DE PRECIOS EN EL HISTORIAL GENERAL ---
         if "Precio Unitario" in df_hist_total.columns:
+            df_hist_total["Precio Unitario"] = (
+                df_hist_total["Precio Unitario"]
+                .astype(str)
+                .str.replace(r"[$,]", "", regex=True)
+            )
             df_hist_total["Precio Unitario"] = pd.to_numeric(df_hist_total["Precio Unitario"], errors="coerce").fillna(0)
         else:
             df_hist_total["Precio Unitario"] = 0.0
@@ -581,7 +587,7 @@ if os.path.exists(archivo_historial):
                     # ==========================================
                     # MODIFICAR MANO DE OBRA CON st.data_editor
                     # ==========================================
-                    with st.expander("✏️️ Modificar mano de obra"):
+                    with st.expander("✏ Modificar mano de obra"):
                         st.info("💡 Haz doble clic sobre cualquier celda de la tabla de abajo para corregir la cantidad, el número de IDP, la fecha, la contrata o el código de proyecto. Al terminar, haz clic en **'Guardar Cambios en el Historial'**.")
                         
                         df_filtrado_proj["_index_real"] = df_filtrado_proj.index
@@ -599,8 +605,16 @@ if os.path.exists(archivo_historial):
                                 
                                 df_limpio = df_editado_en_pantalla.copy()
                                 
+                                # Limpiar símbolos de moneda y convertir a número los costos editados
+                                costos_limpios = (
+                                    df_limpio["Costo Unitario"]
+                                    .astype(str)
+                                    .str.replace(r"[$,]", "", regex=True)
+                                )
+                                costos_num = pd.to_numeric(costos_limpios, errors="coerce").fillna(0)
                                 cants_num = pd.to_numeric(df_limpio["Cantidad"], errors="coerce").fillna(0)
-                                costos_num = pd.to_numeric(df_limpio["Costo Unitario"], errors="coerce").fillna(0)
+                                
+                                df_limpio["Costo Unitario"] = costos_num
                                 df_limpio["Costo Total"] = costos_num * cants_num
                                 
                                 df_limpio = df_limpio.rename(columns={
