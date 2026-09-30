@@ -729,4 +729,4 @@ if os.path.exists(archivo_historial):
     except Exception as e:
         st.warning(f"No se pudo cargar la consulta por proyecto: {e}")
 else:
-    st.info("💡 Consejo para supervisores: Aún no hay registros en el historial. Tan pronto guar
+    st.info("💡 Consejo para supervisores: Aún no hay registros en el historial. Tan pronto guardes el primer IDP, podrás consultar los montos totales acumulados directamente aquí al entrar a la aplicación sin necesidad de digitar nada.")
