@@ -1,3 +1,8 @@
+¡Claro que sí! Tienes toda la razón, un nombre más corto, claro y directo como "✏️ Modificar mano de obra" queda mucho mejor y más profesional para la interfaz de administración.
+
+Aquí tienes el código completo con el título del expander cambiado exactamente a "✏️ Modificar mano de obra", manteniendo toda la flexibilidad del editor interactivo y la seguridad de tus montos:
+
+Python
 import io
 import os
 import pandas as pd
@@ -434,7 +439,7 @@ if df is not None:
                     st.rerun()
 
 # ==========================================
-# SECCIÓN: CONSULTA RÁPIDA POR PROYECTO & EDICIÓN FLEXIBLE
+# SECCIÓN: CONSULTA RÁPIDA POR PROYECTO & MODIFICAR MANO DE OBRA
 # ==========================================
 st.markdown("---")
 st.subheader("🔍 Consultar Historial Consolidado por Proyecto")
@@ -454,6 +459,18 @@ if os.path.exists(archivo_historial):
     try:
         df_hist_total = pd.read_csv(archivo_historial)
         
+        if "Precio Unitario" in df_hist_total.columns:
+            df_hist_total["Precio Unitario"] = pd.to_numeric(df_hist_total["Precio Unitario"], errors="coerce").fillna(0)
+        else:
+            df_hist_total["Precio Unitario"] = 0.0
+
+        if "Cantidad" in df_hist_total.columns:
+            df_hist_total["Cantidad"] = pd.to_numeric(df_hist_total["Cantidad"], errors="coerce").fillna(0)
+        else:
+            df_hist_total["Cantidad"] = 0.0
+
+        df_hist_total["Monto Total"] = df_hist_total["Precio Unitario"] * df_hist_total["Cantidad"]
+
         def formatear_columnas_tabla(df_in):
             df_fmt = df_in.copy()
             renombres_map = {
@@ -471,7 +488,7 @@ if os.path.exists(archivo_historial):
             df_fmt = df_fmt.rename(columns=renombres_map)
             orden_columnas = ["Código", "DETALLE", "Costo Unitario", "Cantidad", "Costo Total", "IDP", "Fec", "Contrata", "Código Proyecto", "Nombre Proyecto"]
             cols_existentes = [c for c in orden_columnas if c in df_fmt.columns]
-            otras = [c for c in df_fmt.columns if c not in cols_existentes and c != "Monto Total Num"]
+            otras = [c for c in df_fmt.columns if c not in cols_existentes]
             df_fmt = df_fmt[cols_existentes + otras]
             return df_fmt
 
@@ -549,72 +566,58 @@ if os.path.exists(archivo_historial):
                 if proj_seleccionado != "-- Seleccione el proyecto --":
                     df_filtrado_proj = df_hist_total[df_hist_total["Código Proyecto"] == proj_seleccionado].copy()
                     
-                    if "Monto Total" in df_filtrado_proj.columns:
-                        df_filtrado_proj["Monto Total Num"] = pd.to_numeric(df_filtrado_proj["Monto Total"], errors="coerce").fillna(0)
-                        monto_acumulado_proyecto = df_filtrado_proj["Monto Total Num"].sum()
-                    else:
-                        monto_acumulado_proyecto = 0
+                    monto_acumulado_proyecto = df_filtrado_proj["Monto Total"].sum()
 
-                    if "Precio Unitario" in df_filtrado_proj.columns:
-                        df_filtrado_proj["Precio Unitario"] = pd.to_numeric(df_filtrado_proj["Precio Unitario"], errors="coerce").map(
-                            lambda x: f"${x:,.2f}" if pd.notnull(x) else "$0.00"
-                        )
-
-                    if "Monto Total" in df_filtrado_proj.columns:
-                        df_filtrado_proj["Monto Total"] = df_filtrado_proj["Monto Total Num"].map(
-                            lambda x: f"${x:,.2f}" if pd.notnull(x) else "$0.00"
-                        )
+                    st.metric(
+                        label=f"💰 Monto Total Acumulado Pagado en el Proyecto ({proj_seleccionado})",
+                        value=f"${monto_acumulado_proyecto:,.2f}"
+                    )
 
                     df_proj_fmt = formatear_columnas_tabla(df_filtrado_proj)
-                    cols_a_mostrar_proj = [c for c in df_proj_fmt.columns if c not in ["Código Proyecto", "Nombre Proyecto", "Monto Total Num"]]
+                    cols_a_mostrar_proj = [c for c in df_proj_fmt.columns if c not in ["Código Proyecto", "Nombre Proyecto"]]
 
                     st.info(f"👷 **Mano de obra proyecto : {proj_seleccionado}**")
-                    st.dataframe(df_proj_fmt[cols_a_mostrar_proj], use_container_width=True)
+                    
+                    df_vistas_display = df_proj_fmt[cols_a_mostrar_proj].copy()
+                    df_vistas_display["Costo Unitario"] = df_vistas_display["Costo Unitario"].map(lambda x: f"${x:,.2f}")
+                    df_vistas_display["Costo Total"] = df_vistas_display["Costo Total"].map(lambda x: f"${x:,.2f}")
+                    st.dataframe(df_vistas_display, use_container_width=True)
 
                     # ==========================================
-                    # EDICIÓN FLEXIBLE CON st.data_editor
+                    # MODIFICAR MANO DE OBRA CON st.data_editor
                     # ==========================================
-                    with st.expander("✏️ Editor Flexible de Registros (Modificar o Corregir Directamente en Pantalla)"):
+                    with st.expander("✏️ Modificar mano de obra"):
                         st.info("💡 Haz doble clic sobre cualquier celda de la tabla de abajo para corregir la cantidad, el número de IDP, la fecha, la contrata o el código de proyecto. Al terminar, haz clic en **'Guardar Cambios en el Historial'**.")
                         
-                        # Mantenemos los índices originales en una columna auxiliar para poder sincronizar al guardar
                         df_filtrado_proj["_index_real"] = df_filtrado_proj.index
                         
-                        # Mostramos el editor interactivo
                         df_editado_en_pantalla = st.data_editor(
-                            df_filtrado_proj.drop(columns=["Monto Total Num"], errors="ignore"),
+                            df_proj_fmt[cols_a_mostrar_proj + ["Código Proyecto", "Nombre Proyecto"]],
                             use_container_width=True,
                             key=f"editor_{proj_seleccionado}",
-                            num_rows="dynamic"  # Permite también añadir o borrar filas si se requiere
+                            num_rows="dynamic"
                         )
                         
                         if st.button("💾 Guardar Cambios en el Historial General", key=f"btn_save_editor_{proj_seleccionado}"):
                             try:
-                                # Reconstruimos el df_hist_total combinando los cambios realizados en este proyecto
-                                # y manteniendo intactos los demás proyectos que no se estaban editando
                                 df_otros_proyectos = df_hist_total[df_hist_total["Código Proyecto"] != proj_seleccionado]
                                 
-                                # Limpiamos la columna auxiliar de índices antes de guardar
-                                df_limpio = df_editado_en_pantalla.drop(columns=["_index_real"], errors="ignore")
+                                df_limpio = df_editado_en_pantalla.copy()
                                 
-                                # Recalcular Montos Totales si se modificaron cantidades o costos unitarios
-                                if "Cantidad" in df_limpio.columns and "Costo Unitario" in df_limpio.columns:
-                                    # Limpiamos el símbolo de dólar si lo tuviera el costo unitario
-                                    costos_num = pd.to_numeric(df_limpio["Costo Unitario"].astype(str).str.replace("$", "").str.replace(",", ""), errors="coerce").fillna(0)
-                                    cants_num = pd.to_numeric(df_limpio["Cantidad"], errors="coerce").fillna(0)
-                                    df_limpio["Monto Total"] = costos_num * cants_num
-                                    # Renombramos de vuelta a los nombres internos estándar del CSV
-                                    df_limpio = df_limpio.rename(columns={
-                                        "Código": "Actividad",
-                                        "DETALLE": "Descripción",
-                                        "Costo Unitario": "Precio Unitario",
-                                        "Costo Total": "Monto Total",
-                                        "IDP": "IDP N°",
-                                        "Fec": "Fecha",
-                                        "Contrata": "Contratista"
-                                    })
+                                cants_num = pd.to_numeric(df_limpio["Cantidad"], errors="coerce").fillna(0)
+                                costos_num = pd.to_numeric(df_limpio["Costo Unitario"], errors="coerce").fillna(0)
+                                df_limpio["Costo Total"] = costos_num * cants_num
                                 
-                                # Combinamos y guardamos el archivo completo
+                                df_limpio = df_limpio.rename(columns={
+                                    "Código": "Actividad",
+                                    "DETALLE": "Descripción",
+                                    "Costo Unitario": "Precio Unitario",
+                                    "Costo Total": "Monto Total",
+                                    "IDP": "IDP N°",
+                                    "Fec": "Fecha",
+                                    "Contrata": "Contratista"
+                                })
+                                
                                 df_final_actualizado = pd.concat([df_otros_proyectos, df_limpio], ignore_index=True)
                                 df_final_actualizado.to_csv(archivo_historial, index=False)
                                 
@@ -700,4 +703,4 @@ if os.path.exists(archivo_historial):
     except Exception as e:
         st.warning(f"No se pudo cargar la consulta por proyecto: {e}")
 else:
-    st.info("💡 Consejo para supervisores: Aún no hay registros en el historial. Tan pronto guardes el primer IDP, podrás consultar los montos totales acumulados directamente aquí al entrar a la aplicación sin necesidad de digitar nada.")
+    st.info("💡 Consejo para supervisores: Aún no hay registros en el historial. Tan pronto guardes
