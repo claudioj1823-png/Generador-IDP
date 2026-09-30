@@ -1,6 +1,3 @@
-Aquí tienes el código completo actualizado de la aplicación (con la corrección integrada en la sección de guardado para que los precios no se pongan en cero al editar el IDP o cualquier otro campo):
-
-Python
 import io
 import os
 import pandas as pd
