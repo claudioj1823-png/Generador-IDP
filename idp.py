@@ -1,3 +1,6 @@
+Aquí tienes el código completo actualizado de la aplicación (con la corrección integrada en la sección de guardado para que los precios no se pongan en cero al editar el IDP o cualquier otro campo):
+
+Python
 import io
 import os
 import pandas as pd
@@ -396,7 +399,7 @@ if df is not None:
 
                             cols_frente = ["IDP N°", "Fecha", "Código Proyecto", "Nombre Proyecto", "Contratista"]
                             otras_cols = [c for c in df_guardar.columns if c not in cols_frente]
-                            df_guardar = df_guardar[cols_frente + outras_cols]
+                            df_guardar = df_guardar[cols_frente + otras_cols]
 
                             if os.path.exists(archivo_historial):
                                 df_guardar.to_csv(
@@ -605,18 +608,35 @@ if os.path.exists(archivo_historial):
                                 
                                 df_limpio = df_editado_en_pantalla.copy()
                                 
-                                # Limpiar símbolos de moneda y convertir a número los costos editados
-                                costos_limpios = (
-                                    df_limpio["Costo Unitario"]
-                                    .astype(str)
-                                    .str.replace(r"[$,]", "", regex=True)
-                                )
-                                costos_num = pd.to_numeric(costos_limpios, errors="coerce").fillna(0)
+                                # 1. Convertir cantidades a numérico
                                 cants_num = pd.to_numeric(df_limpio["Cantidad"], errors="coerce").fillna(0)
+                                df_limpio["Cantidad"] = cants_num
                                 
-                                df_limpio["Costo Unitario"] = costos_num
-                                df_limpio["Costo Total"] = costos_num * cants_num
+                                # 2. Recuperar y recalcular los costos unitarios reales desde el Excel principal de tarifas
+                                costos_actualizados = []
+                                for _, row_ed in df_limpio.iterrows():
+                                    c_act = str(row_ed.get("Código", "")).strip()
+                                    c_cont = str(row_ed.get("Contrata", "")).strip()
+                                    
+                                    # Buscar precio en el DataFrame original de actividades/tarifas
+                                    df_tarifa_match = df[(df["Contrata"].str.lower() == c_cont.lower()) & (df["Actividad"] == c_act)]
+                                    cols_p = [c for c in df.columns if "precio" in c.lower() or "costo" in c.lower()]
+                                    
+                                    precio_encontrado = 0.0
+                                    if not df_tarifa_match.empty and cols_p:
+                                        val_p = df_tarifa_match.iloc[0][cols_p[0]]
+                                        precio_encontrado = pd.to_numeric(str(val_p).replace("$", "").replace(",", ""), errors="coerce") or 0.0
+                                    else:
+                                        # Si no se encuentra en el Excel, intentar limpiar el que venía en pantalla por si acaso
+                                        val_pantalla = str(row_ed.get("Costo Unitario", "0")).replace("$", "").replace(",", "")
+                                        precio_encontrado = pd.to_numeric(val_pantalla, errors="coerce") or 0.0
+                                        
+                                    costos_actualizados.append(precio_encontrado)
                                 
+                                df_limpio["Costo Unitario"] = costos_actualizados
+                                df_limpio["Costo Total"] = df_limpio["Costo Unitario"] * df_limpio["Cantidad"]
+                                
+                                # 3. Renombrar columnas al formato original del historial general
                                 df_limpio = df_limpio.rename(columns={
                                     "Código": "Actividad",
                                     "DETALLE": "Descripción",
@@ -630,7 +650,7 @@ if os.path.exists(archivo_historial):
                                 df_final_actualizado = pd.concat([df_otros_proyectos, df_limpio], ignore_index=True)
                                 df_final_actualizado.to_csv(archivo_historial, index=False)
                                 
-                                st.success("¡Todos los cambios se han guardado exitosamente en el historial general! Recargando...")
+                                st.success("¡Todos los cambios y costos se han guardado exitosamente en el historial general! Recargando...")
                                 st.rerun()
                             except Exception as e:
                                 st.error(f"Error al guardar los cambios: {e}")
@@ -686,7 +706,7 @@ if os.path.exists(archivo_historial):
                             st.dataframe(df_mat_resumen, use_container_width=True)
                         else:
                             df_mat_resumen = pd.DataFrame()
-                            st.info("No hay materiales asociados a los registros de este proyecto.")
+                            st.info("No hay materiales asociados al historial de este proyecto.")
 
                     # --- DESCARGA EN EXCEL DE DOS PESTAÑAS (PARA EL PROYECTO SELECCIONADO) ---
                     output_proj = io.BytesIO()
@@ -712,4 +732,4 @@ if os.path.exists(archivo_historial):
     except Exception as e:
         st.warning(f"No se pudo cargar la consulta por proyecto: {e}")
 else:
-    st.info("💡 Consejo para supervisores: Aún no hay registros en el historial. Tan pronto guardes el primer IDP, podrás consultar los montos totales acumulados directamente aquí al entrar a la aplicación sin necesidad de digitar nada.")
+    st.info("💡 Consejo para supervisores: Aún no hay registros en el historial. Tan pronto guar
