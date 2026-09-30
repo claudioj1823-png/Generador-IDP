@@ -1,8 +1,3 @@
-¡Claro que sí! Tienes toda la razón, un nombre más corto, claro y directo como "✏️ Modificar mano de obra" queda mucho mejor y más profesional para la interfaz de administración.
-
-Aquí tienes el código completo con el título del expander cambiado exactamente a "✏️ Modificar mano de obra", manteniendo toda la flexibilidad del editor interactivo y la seguridad de tus montos:
-
-Python
 import io
 import os
 import pandas as pd
@@ -586,7 +581,7 @@ if os.path.exists(archivo_historial):
                     # ==========================================
                     # MODIFICAR MANO DE OBRA CON st.data_editor
                     # ==========================================
-                    with st.expander("✏️ Modificar mano de obra"):
+                    with st.expander("✏️️ Modificar mano de obra"):
                         st.info("💡 Haz doble clic sobre cualquier celda de la tabla de abajo para corregir la cantidad, el número de IDP, la fecha, la contrata o el código de proyecto. Al terminar, haz clic en **'Guardar Cambios en el Historial'**.")
                         
                         df_filtrado_proj["_index_real"] = df_filtrado_proj.index
@@ -703,4 +698,4 @@ if os.path.exists(archivo_historial):
     except Exception as e:
         st.warning(f"No se pudo cargar la consulta por proyecto: {e}")
 else:
-    st.info("💡 Consejo para supervisores: Aún no hay registros en el historial. Tan pronto guardes
+    st.info("💡 Consejo para supervisores: Aún no hay registros en el historial. Tan pronto guardes el primer IDP, podrás consultar los montos totales acumulados directamente aquí al entrar a la aplicación sin necesidad de digitar nada.")
