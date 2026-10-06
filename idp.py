@@ -440,10 +440,16 @@ st.markdown("---")
 st.subheader("🔍 Consultar Historial Consolidado por Proyecto")
 
 archivo_historial = "historial_idp_general.csv"
-archivo_subido = st.file_uploader("📂 (Opcional) Subir respaldo anterior de Historial (CSV) si hubo un reinicio de servidor", type=["csv"])
+
+# Actualizado para aceptar archivos Excel (.xlsx) y CSV
+archivo_subido = st.file_uploader("📂 (Opcional) Subir respaldo anterior de Historial (Excel o CSV)", type=["xlsx", "csv"])
 if archivo_subido is not None:
     try:
-        df_subido = pd.read_csv(archivo_subido)
+        if archivo_subido.name.endswith('.xlsx'):
+            df_subido = pd.read_excel(archivo_subido, sheet_name="Historial_Estructuras")
+        else:
+            df_subido = pd.read_csv(archivo_subido)
+            
         df_subido.to_csv(archivo_historial, index=False)
         st.success("¡Historial restaurado exitosamente desde tu archivo de respaldo!")
         st.rerun()
@@ -454,13 +460,9 @@ if os.path.exists(archivo_historial):
     try:
         df_hist_total = pd.read_csv(archivo_historial)
         
-        # =========================================================================
-        # REPARACIÓN AUTOMÁTICA Y BLINDAJE DE PRECIOS DESDE EL EXCEL ORIGINAL
-        # =========================================================================
         cols_p_excel = [c for c in df.columns if "precio" in c.lower() or "costo" in c.lower()]
         if cols_p_excel:
             col_p_nom = cols_p_excel[0]
-            # Crear un diccionario maestro rápido: (Contrata_lower, Actividad_lower) -> Precio_Real
             dict_tarifas_maestro = {}
             for _, r_t in df.iterrows():
                 c_cont_m = str(r_t.get("Contrata", "")).strip().lower()
@@ -468,19 +470,15 @@ if os.path.exists(archivo_historial):
                 val_pr = pd.to_numeric(str(r_t.get(col_p_nom, 0)).replace("$", "").replace(",", ""), errors="coerce") or 0.0
                 dict_tarifas_maestro[(c_cont_m, c_act_m)] = val_pr
 
-            # Aplicar corrección sobre todo el historial leído para asegurar que ningún precio sea 0 si existe tarifa
             precios_reparados = []
             for _, row_h in df_hist_total.iterrows():
-                # Detectar nombre de columna de actividad y contrata en el CSV
                 act_val = str(row_h.get("Actividad", row_h.get("Código", ""))).strip().lower()
                 cont_val = str(row_h.get("Contratista", row_h.get("Contrata", ""))).strip().lower()
                 
-                # Precio actual en el historial
                 p_actual_raw = row_h.get("Precio Unitario", row_h.get("Costo Unitario", 0))
                 p_actual = pd.to_numeric(str(p_actual_raw).replace("$", "").replace(",", ""), errors="coerce") or 0.0
                 
                 if p_actual == 0.0:
-                    # Buscar en el maestro del Excel
                     p_actual = dict_tarifas_maestro.get((cont_val, act_val), 0.0)
                 
                 precios_reparados.append(p_actual)
@@ -528,7 +526,6 @@ if os.path.exists(archivo_historial):
                     key="filtro_proyecto_historial_global"
                 )
                 
-                # --- BOTÓN DE DESCARGA MAESTRA DE TODOS LOS PROYECTOS ---
                 col_down_gen1, col_down_gen2 = st.columns([2, 2])
                 with col_down_gen1:
                     output_todos = io.BytesIO()
@@ -642,13 +639,12 @@ if os.path.exists(archivo_historial):
                                     if precio_encontrado == 0.0:
                                         val_pantalla = str(row_ed.get("Costo Unitario", "0")).replace("$", "").replace(",", "")
                                         precio_encontrado = pd.to_numeric(val_pantalla, errors="coerce") or 0.0
-                                        
                                     costos_actualizados.append(precio_encontrado)
                                 
-                                df_limpio["Costo Unitario"] = costos_actualizados
-                                df_limpio["Costo Total"] = df_limpio["Costo Unitario"] * df_limpio["Cantidad"]
+                                df_limpio["Precio Unitario"] = costos_actualizados
+                                df_limpio["Monto Total"] = df_limpio["Precio Unitario"] * df_limpio["Cantidad"]
                                 
-                                # 3. Renombrar columnas al formato original del historial general
+                                # Revertir nombres de columnas amigables a originales del historial
                                 df_limpio = df_limpio.rename(columns={
                                     "Código": "Actividad",
                                     "DETALLE": "Descripción",
@@ -661,87 +657,11 @@ if os.path.exists(archivo_historial):
                                 
                                 df_final_actualizado = pd.concat([df_otros_proyectos, df_limpio], ignore_index=True)
                                 df_final_actualizado.to_csv(archivo_historial, index=False)
-                                
-                                st.success("¡Todos los cambios y costos se han guardado exitosamente en el historial general! Recargando...")
+                                st.success("¡Cambios guardados con éxito en el historial general!")
                                 st.rerun()
                             except Exception as e:
                                 st.error(f"Error al guardar los cambios: {e}")
-
-                    # --- RECONSTRUCCIÓN EXACTA DE MATERIALES PARA EL PROYECTO CONSULTADO ---
-                    if "Contratista" in df_filtrado_proj.columns and "Actividad" in df_filtrado_proj.columns and "Cantidad" in df_filtrado_proj.columns:
-                        
-                        st.subheader(f"📦 Materiales para el Proyecto ({proj_seleccionado})")
-                        
-                        df_proj_agrupado = df_filtrado_proj.groupby(["Contratista", "Actividad"])["Cantidad"].sum().reset_index()
-                        
-                        df_materiales_acumulado = pd.DataFrame()
-                        for _, row_g in df_proj_agrupado.iterrows():
-                            c_contratista = row_g["Contratista"]
-                            c_actividad = row_g["Actividad"]
-                            c_cant = row_g["Cantidad"]
-                            
-                            df_match = df[(df["Contrata"].str.lower() == c_contratista.lower()) & (df["Actividad"] == c_actividad)].copy()
-                            if not df_match.empty:
-                                df_match["Cant_IDP"] = c_cant
-                                col_cant_mat = [c for c in df_match.columns if "cant" in c.lower() and c.lower() != "cantidad" and c.lower() != "cant_idp"]
-                                if col_cant_mat:
-                                    c_mat = col_cant_mat[0]
-                                    df_match["Cantidad_Total"] = df_match[c_mat] * df_match["Cant_IDP"]
-                                    df_materiales_acumulado = pd.concat([df_materiales_acumulado, df_match], ignore_index=True)
-
-                        if not df_materiales_acumulado.empty:
-                            cols_cod = [c for c in df_materiales_acumulado.columns if "sap" in c.lower() or "codigo" in c.lower()]
-                            cols_desc_mat = [c for c in df_materiales_acumulado.columns if "mat" in c.lower() or "descripci_mat" in c.lower() or (c.lower() != "descripción de la actividad" and "descripci" in c.lower())]
-                            cols_und = [c for c in df_materiales_acumulado.columns if "unid" in c.lower()]
-
-                            cod_col = cols_cod[0] if cols_cod else df_materiales_acumulado.columns[0]
-                            desc_mat_col = cols_desc_mat[0] if cols_desc_mat else cod_col
-                            und_col = cols_und[0] if cols_und else None
-
-                            cols_agrupar_mat = [cod_col, desc_mat_col]
-                            if und_col:
-                                cols_agrupar_mat.append(und_col)
-
-                            df_mat_resumen = df_materiales_acumulado.groupby(cols_agrupar_mat, as_index=False).agg({"Cantidad_Total": "sum"})
-                            df_mat_resumen[cod_col] = df_mat_resumen[cod_col].astype(str).str.replace(r"\.0$", "", regex=True)
-                            df_mat_resumen["Cantidad_Total"] = pd.to_numeric(df_mat_resumen["Cantidad_Total"], errors="coerce").fillna(0).astype(int)
-
-                            renombres_mat = {
-                                cod_col: "Código SAP",
-                                desc_mat_col: "Descripción de Material",
-                                "Cantidad_Total": "Cantidad Total"
-                            }
-                            if und_col:
-                                renombres_mat[und_col] = "Unidad"
-
-                            df_mat_resumen = df_mat_resumen.rename(columns=renombres_mat)
-                            st.dataframe(df_mat_resumen, use_container_width=True)
-                        else:
-                            df_mat_resumen = pd.DataFrame()
-                            st.info("No hay materiales asociados al historial de este proyecto.")
-
-                    # --- DESCARGA EN EXCEL DE DOS PESTAÑAS (PARA EL PROYECTO SELECCIONADO) ---
-                    output_proj = io.BytesIO()
-                    with pd.ExcelWriter(output_proj, engine="openpyxl") as writer:
-                        df_proj_fmt[cols_a_mostrar_proj].to_excel(writer, sheet_name="Estructuras_Actividades", index=False)
-                        if 'df_mat_resumen' in locals() and not df_mat_resumen.empty:
-                            df_mat_resumen.to_excel(writer, sheet_name="Requerimiento_Materiales", index=False)
-                    output_proj.seek(0)
-
-                    st.download_button(
-                        label=f"📥 Descargar Respaldo Completo en Excel (2 Pestañas) ({proj_seleccionado})",
-                        data=output_proj,
-                        file_name=f"Respaldo_IDP_Proyecto_{proj_seleccionado}.xlsx",
-                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                        key="btn_dl_proj_global"
-                    )
-                else:
-                    st.info("💡 Selecciona un código de proyecto arriba para ver su respaldo histórico y montos totales acumulados en pantalla, o haz clic en el botón de descarga general.")
-            else:
-                st.info("Aún no hay proyectos registrados en el historial todavía.")
-        else:
-            st.info("El archivo de historial no tiene la columna de proyectos.")
     except Exception as e:
-        st.warning(f"No se pudo cargar la consulta por proyecto: {e}")
+        st.warning(f"Error leyendo el historial: {e}")
 else:
-    st.info("💡 Consejo para supervisores: Aún no hay registros en el historial. Tan pronto guardes el primer IDP, podrás consultar los montos totales acumulados directamente aquí al entrar a la aplicación sin necesidad de digitar nada.")
+    st.info("💡 Aún no hay registros en el historial general. Tan pronto guardes el primer IDP, podrás consultar los montos totales acumulados directamente aquí.")
