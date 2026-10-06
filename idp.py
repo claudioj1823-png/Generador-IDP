@@ -441,7 +441,7 @@ st.subheader("🔍 Consultar Historial Consolidado por Proyecto")
 
 archivo_historial = "historial_idp_general.csv"
 
-# Actualizado para aceptar archivos Excel (.xlsx) y CSV
+# Actualizado para aceptar archivos Excel (.xlsx) y CSV con limpieza automática de columnas duplicadas
 archivo_subido = st.file_uploader("📂 (Opcional) Subir respaldo anterior de Historial (Excel o CSV)", type=["xlsx", "csv"])
 if archivo_subido is not None:
     try:
@@ -450,6 +450,8 @@ if archivo_subido is not None:
         else:
             df_subido = pd.read_csv(archivo_subido)
             
+        # Limpieza de columnas duplicadas si las hubiera
+        df_subido = df_subido.loc[:, ~df_subido.columns.duplicated()]
         df_subido.to_csv(archivo_historial, index=False)
         st.success("¡Historial restaurado exitosamente desde tu archivo de respaldo!")
         st.rerun()
@@ -459,6 +461,8 @@ if archivo_subido is not None:
 if os.path.exists(archivo_historial):
     try:
         df_hist_total = pd.read_csv(archivo_historial)
+        # Limpiar columnas duplicadas en el historial general cargado
+        df_hist_total = df_hist_total.loc[:, ~df_hist_total.columns.duplicated()]
         
         cols_p_excel = [c for c in df.columns if "precio" in c.lower() or "costo" in c.lower()]
         if cols_p_excel:
@@ -496,6 +500,7 @@ if os.path.exists(archivo_historial):
 
         def formatear_columnas_tabla(df_in):
             df_fmt = df_in.copy()
+            df_fmt = df_fmt.loc[:, ~df_fmt.columns.duplicated()]
             renombres_map = {
                 "Actividad": "Código",
                 "Descripción": "DETALLE",
@@ -513,6 +518,7 @@ if os.path.exists(archivo_historial):
             cols_existentes = [c for c in orden_columnas if c in df_fmt.columns]
             otras = [c for c in df_fmt.columns if c not in cols_existentes]
             df_fmt = df_fmt[cols_existentes + otras]
+            df_fmt = df_fmt.loc[:, ~df_fmt.columns.duplicated()]
             return df_fmt
 
         if "Código Proyecto" in df_hist_total.columns:
@@ -623,6 +629,7 @@ if os.path.exists(archivo_historial):
                                 df_otros_proyectos = df_hist_total[df_hist_total["Código Proyecto"] != proj_seleccionado]
                                 
                                 df_limpio = df_editado_en_pantalla.copy()
+                                df_limpio = df_limpio.loc[:, ~df_limpio.columns.duplicated()]
                                 
                                 # 1. Convertir cantidades a numérico
                                 cants_num = pd.to_numeric(df_limpio["Cantidad"], errors="coerce").fillna(0)
@@ -656,6 +663,7 @@ if os.path.exists(archivo_historial):
                                 })
                                 
                                 df_final_actualizado = pd.concat([df_otros_proyectos, df_limpio], ignore_index=True)
+                                df_final_actualizado = df_final_actualizado.loc[:, ~df_final_actualizado.columns.duplicated()]
                                 df_final_actualizado.to_csv(archivo_historial, index=False)
                                 st.success("¡Cambios guardados con éxito en el historial general!")
                                 st.rerun()
