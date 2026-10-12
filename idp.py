@@ -1,5 +1,3 @@
-Aquí tienes tu código 100% completo, sin recortes y listo para copiar y pegar de principio a fin, con la limpieza de la fecha aplicada correctamente:
-
 Python
 import io
 import os
