@@ -464,15 +464,10 @@ if os.path.exists(archivo_historial):
         # Limpiar columnas duplicadas en el historial general cargado
         df_hist_total = df_hist_total.loc[:, ~df_hist_total.columns.duplicated()]
         
-        # --- LIMPIEZA DIRECTA E INFALIBLE DE FECHAS ---
+        # --- LIMPIEZA DE FECHAS DEFINITIVA (ELIMINA HORAS Y '00:00:00') ---
         if "Fecha" in df_hist_total.columns:
-            df_hist_total["Fecha"] = (
-                df_hist_total["Fecha"]
-                .astype(str)
-                .str.replace(" 00:00:00", "", regex=False)
-                .str.split(" ")
-                .str[0]
-                .str.strip()
+            df_hist_total["Fecha"] = pd.to_datetime(df_hist_total["Fecha"], errors='coerce').dt.strftime('%Y-%m-%d').fillna(
+                df_hist_total["Fecha"].astype(str).str.replace(" 00:00:00", "", regex=False).str.split(" ").str[0].str.strip()
             )
         
         cols_p_excel = [c for c in df.columns if "precio" in c.lower() or "costo" in c.lower()]
@@ -535,32 +530,14 @@ if os.path.exists(archivo_historial):
         if "Código Proyecto" in df_hist_total.columns:
             proyectos_guardados = df_hist_total["Código Proyecto"].dropna().unique().tolist()
             if proyectos_guardados:
-                # Selector mejorado combinando Código y Nombre de Proyecto
-                opciones_dict_menu = {}
-                for cod_p in proyectos_guardados:
-                    nombre_p = dict_proyectos.get(cod_p, "")
-                    if not nombre_p:
-                        df_temp_p = df_hist_total[df_hist_total["Código Proyecto"] == cod_p]
-                        if "Nombre Proyecto" in df_temp_p.columns and not df_temp_p["Nombre Proyecto"].dropna().empty:
-                            nombre_p = df_temp_p["Nombre Proyecto"].dropna().iloc[0]
-                    
-                    if nombre_p and str(nombre_p).lower() != "nan":
-                        opciones_dict_menu[f"{cod_p} - {nombre_p}"] = cod_p
-                    else:
-                        opciones_dict_menu[cod_p] = cod_p
-
-                lista_opciones_display = ["-- Seleccione el proyecto --"] + list(opciones_dict_menu.keys())
+                # Selector de arriba original (solo muestra los códigos de proyecto)
+                opciones_menu = ["-- Seleccione el proyecto --"] + proyectos_guardados
                 
-                proj_seleccionado_label = st.selectbox(
-                    "Selecciona el Proyecto a Consultar en Pantalla:",
-                    lista_opciones_display,
+                proj_seleccionado = st.selectbox(
+                    "Selecciona el Código de Proyecto a Consultar en Pantalla:",
+                    opciones_menu,
                     key="filtro_proyecto_historial_global"
                 )
-                
-                if proj_seleccionado_label != "-- Seleccione el proyecto --":
-                    proj_seleccionado = opciones_dict_menu[proj_seleccionado_label]
-                else:
-                    proj_seleccionado = "-- Seleccione el proyecto --"
                 
                 col_down_gen1, col_down_gen2 = st.columns([2, 2])
                 with col_down_gen1:
@@ -625,16 +602,19 @@ if os.path.exists(archivo_historial):
                     df_filtrado_proj = df_hist_total[df_hist_total["Código Proyecto"] == proj_seleccionado].copy()
                     
                     monto_acumulado_proyecto = df_filtrado_proj["Monto Total"].sum()
+                    
+                    # Obtener únicamente el nombre del proyecto desde el diccionario (si no existe, muestra el código)
+                    nombre_proj_actual = dict_proyectos.get(proj_seleccionado, proj_seleccionado)
 
                     st.metric(
-                        label=f"💰 Monto Total Acumulado Pagado en el Proyecto ({proj_seleccionado})",
+                        label=f"💰 Monto Total Acumulado Pagado en el Proyecto ({nombre_proj_actual})",
                         value=f"${monto_acumulado_proyecto:,.2f}"
                     )
 
                     df_proj_fmt = formatear_columnas_tabla(df_filtrado_proj)
                     cols_a_mostrar_proj = [c for c in df_proj_fmt.columns if c not in ["Código Proyecto", "Nombre Proyecto"]]
 
-                    st.info(f"👷 **Mano de obra proyecto : {proj_seleccionado}**")
+                    st.info(f"👷 **Mano de obra proyecto : {nombre_proj_actual}**")
                     
                     df_vistas_display = df_proj_fmt[cols_a_mostrar_proj].copy()
                     df_vistas_display["Costo Unitario"] = df_vistas_display["Costo Unitario"].map(lambda x: f"${x:,.2f}")
@@ -693,15 +673,10 @@ if os.path.exists(archivo_historial):
                                 }
                                 df_limpio = df_limpio.rename(columns=renombres_inversos)
                                 
-                                # Limpieza directa e infalible de fecha al guardar desde el editor
+                                # Limpieza de fecha al guardar desde el editor
                                 if "Fecha" in df_limpio.columns:
-                                    df_limpio["Fecha"] = (
-                                        df_limpio["Fecha"]
-                                        .astype(str)
-                                        .str.replace(" 00:00:00", "", regex=False)
-                                        .str.split(" ")
-                                        .str[0]
-                                        .str.strip()
+                                    df_limpio["Fecha"] = pd.to_datetime(df_limpio["Fecha"], errors='coerce').dt.strftime('%Y-%m-%d').fillna(
+                                        df_limpio["Fecha"].astype(str).str.replace(" 00:00:00", "", regex=False).str.split(" ").str[0].str.strip()
                                     )
                                 
                                 df_final_actualizado = pd.concat([df_otros_proyectos, df_limpio], ignore_index=True)
