@@ -23,8 +23,8 @@ if not st.session_state.autenticado:
 
 st.title("Generador de IDP (Informe Diario de Producción)")
 st.write(
-    "Calcula montos por contratista, proyecto y materiales excluyendo"
-    " actividades sin insumos de almacén."
+    "Calcula montos por contratista, proyecto y materiales excluyendo "
+    "actividades sin insumos de almacén."
 )
 
 
@@ -464,6 +464,10 @@ if os.path.exists(archivo_historial):
         # Limpiar columnas duplicadas en el historial general cargado
         df_hist_total = df_hist_total.loc[:, ~df_hist_total.columns.duplicated()]
         
+        # Limpieza de fecha para evitar ' 00:00:00'
+        if "Fecha" in df_hist_total.columns:
+            df_hist_total["Fecha"] = pd.to_datetime(df_hist_total["Fecha"], errors='coerce').dt.strftime('%Y-%m-%d').fillna(df_hist_total["Fecha"].astype(str))
+        
         cols_p_excel = [c for c in df.columns if "precio" in c.lower() or "costo" in c.lower()]
         if cols_p_excel:
             col_p_nom = cols_p_excel[0]
@@ -524,13 +528,32 @@ if os.path.exists(archivo_historial):
         if "Código Proyecto" in df_hist_total.columns:
             proyectos_guardados = df_hist_total["Código Proyecto"].dropna().unique().tolist()
             if proyectos_guardados:
-                opciones_menu = ["-- Seleccione el proyecto --"] + proyectos_guardados
+                # Selector mejorado combinando Código y Nombre de Proyecto
+                opciones_dict_menu = {}
+                for cod_p in proyectos_guardados:
+                    nombre_p = dict_proyectos.get(cod_p, "")
+                    if not nombre_p:
+                        df_temp_p = df_hist_total[df_hist_total["Código Proyecto"] == cod_p]
+                        if "Nombre Proyecto" in df_temp_p.columns and not df_temp_p["Nombre Proyecto"].dropna().empty:
+                            nombre_p = df_temp_p["Nombre Proyecto"].dropna().iloc[0]
+                    
+                    if nombre_p and str(nombre_p).lower() != "nan":
+                        opciones_dict_menu[f"{cod_p} - {nombre_p}"] = cod_p
+                    else:
+                        opciones_dict_menu[cod_p] = cod_p
+
+                lista_opciones_display = ["-- Seleccione el proyecto --"] + list(opciones_dict_menu.keys())
                 
-                proj_seleccionado = st.selectbox(
-                    "Selecciona el Código de Proyecto a Consultar en Pantalla:",
-                    opciones_menu,
+                proj_seleccionado_label = st.selectbox(
+                    "Selecciona el Proyecto a Consultar en Pantalla:",
+                    lista_opciones_display,
                     key="filtro_proyecto_historial_global"
                 )
+                
+                if proj_seleccionado_label != "-- Seleccione el proyecto --":
+                    proj_seleccionado = opciones_dict_menu[proj_seleccionado_label]
+                else:
+                    proj_seleccionado = "-- Seleccione el proyecto --"
                 
                 col_down_gen1, col_down_gen2 = st.columns([2, 2])
                 with col_down_gen1:
@@ -641,30 +664,36 @@ if os.path.exists(archivo_historial):
                                     c_act = str(row_ed.get("Código", "")).strip().lower()
                                     c_cont = str(row_ed.get("Contrata", "")).strip().lower()
                                     
-                                    # Buscar precio en el diccionario maestro o respaldo de pantalla
                                     precio_encontrado = dict_tarifas_maestro.get((c_cont, c_act), 0.0)
                                     if precio_encontrado == 0.0:
                                         val_pantalla = str(row_ed.get("Costo Unitario", "0")).replace("$", "").replace(",", "")
                                         precio_encontrado = pd.to_numeric(val_pantalla, errors="coerce") or 0.0
                                     costos_actualizados.append(precio_encontrado)
                                 
-                                df_limpio["Precio Unitario"] = costos_actualizados
-                                df_limpio["Monto Total"] = df_limpio["Precio Unitario"] * df_limpio["Cantidad"]
+                                df_limpio["Costo Unitario"] = costos_actualizados
+                                df_limpio["Costo Total"] = df_limpio["Costo Unitario"] * df_limpio["Cantidad"]
                                 
-                                # Revertir nombres de columnas amigables a originales del historial
-                                df_limpio = df_limpio.rename(columns={
+                                # Revertir nombres de columnas a nombres internos estándar
+                                renombres_inversos = {
                                     "Código": "Actividad",
                                     "DETALLE": "Descripción",
                                     "Costo Unitario": "Precio Unitario",
+                                    "Cantidad": "Cantidad",
                                     "Costo Total": "Monto Total",
                                     "IDP": "IDP N°",
                                     "Fec": "Fecha",
                                     "Contrata": "Contratista"
-                                })
+                                }
+                                df_limpio = df_limpio.rename(columns=renombres_inversos)
+                                
+                                # Limpieza de fecha al guardar desde el editor
+                                if "Fecha" in df_limpio.columns:
+                                    df_limpio["Fecha"] = pd.to_datetime(df_limpio["Fecha"], errors='coerce').dt.strftime('%Y-%m-%d').fillna(df_limpio["Fecha"].astype(str))
                                 
                                 df_final_actualizado = pd.concat([df_otros_proyectos, df_limpio], ignore_index=True)
                                 df_final_actualizado = df_final_actualizado.loc[:, ~df_final_actualizado.columns.duplicated()]
                                 df_final_actualizado.to_csv(archivo_historial, index=False)
+                                
                                 st.success("¡Cambios guardados con éxito en el historial general!")
                                 st.rerun()
                             except Exception as e:
