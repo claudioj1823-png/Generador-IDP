@@ -464,7 +464,7 @@ if os.path.exists(archivo_historial):
         # Limpiar columnas duplicadas en el historial general cargado
         df_hist_total = df_hist_total.loc[:, ~df_hist_total.columns.duplicated()]
         
-        # --- LIMPIEZA DE FECHAS RADICAL Y DIRECTA POR TEXTO ---
+        # --- LIMPIEZA DE FECHAS RADICAL Y DIRECTA POR TEXTO EN CSV ---
         if "Fecha" in df_hist_total.columns:
             df_hist_total["Fecha"] = (
                 df_hist_total["Fecha"]
@@ -511,6 +511,17 @@ if os.path.exists(archivo_historial):
         def formatear_columnas_tabla(df_in):
             df_fmt = df_in.copy()
             df_fmt = df_fmt.loc[:, ~df_fmt.columns.duplicated()]
+            
+            # --- LIMPIEZA ADICIONAL EN 'Fecha' ANTES DE RENOMBRAR A 'Fec' ---
+            if "Fecha" in df_fmt.columns:
+                df_fmt["Fecha"] = (
+                    df_fmt["Fecha"]
+                    .astype(str)
+                    .str.split(" ")
+                    .str[0]
+                    .str.strip()
+                )
+
             renombres_map = {
                 "Actividad": "Código",
                 "Descripción": "DETALLE",
@@ -524,6 +535,17 @@ if os.path.exists(archivo_historial):
                 "Nombre Proyecto": "Nombre Proyecto"
             }
             df_fmt = df_fmt.rename(columns=renombres_map)
+            
+            # --- LIMPIEZA DIRECTA EN 'Fec' POR SI ACASO ---
+            if "Fec" in df_fmt.columns:
+                df_fmt["Fec"] = (
+                    df_fmt["Fec"]
+                    .astype(str)
+                    .str.split(" ")
+                    .str[0]
+                    .str.strip()
+                )
+
             orden_columnas = ["Código", "DETALLE", "Costo Unitario", "Cantidad", "Costo Total", "IDP", "Fec", "Contrata", "Código Proyecto", "Nombre Proyecto"]
             cols_existentes = [c for c in orden_columnas if c in df_fmt.columns]
             otras = [c for c in df_fmt.columns if c not in cols_existentes]
@@ -674,7 +696,7 @@ if os.path.exists(archivo_historial):
                                 }
                                 df_limpio = df_limpio.rename(columns=renombres_inversos)
                                 
-                                # Limpieza radical de fecha al guardar desde el editor
+                                # Limpieza de fecha al guardar desde el editor
                                 if "Fecha" in df_limpio.columns:
                                     df_limpio["Fecha"] = (
                                         df_limpio["Fecha"]
