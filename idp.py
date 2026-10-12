@@ -1,3 +1,6 @@
+Aquí tienes tu código 100% completo, sin recortes y listo para copiar y pegar de principio a fin, con la limpieza de la fecha aplicada correctamente:
+
+Python
 import io
 import os
 import pandas as pd
@@ -464,9 +467,16 @@ if os.path.exists(archivo_historial):
         # Limpiar columnas duplicadas en el historial general cargado
         df_hist_total = df_hist_total.loc[:, ~df_hist_total.columns.duplicated()]
         
-        # Limpieza de fecha para evitar ' 00:00:00'
+        # --- LIMPIEZA DIRECTA E INFALIBLE DE FECHAS ---
         if "Fecha" in df_hist_total.columns:
-            df_hist_total["Fecha"] = pd.to_datetime(df_hist_total["Fecha"], errors='coerce').dt.strftime('%Y-%m-%d').fillna(df_hist_total["Fecha"].astype(str))
+            df_hist_total["Fecha"] = (
+                df_hist_total["Fecha"]
+                .astype(str)
+                .str.replace(" 00:00:00", "", regex=False)
+                .str.split(" ")
+                .str[0]
+                .str.strip()
+            )
         
         cols_p_excel = [c for c in df.columns if "precio" in c.lower() or "costo" in c.lower()]
         if cols_p_excel:
@@ -686,9 +696,16 @@ if os.path.exists(archivo_historial):
                                 }
                                 df_limpio = df_limpio.rename(columns=renombres_inversos)
                                 
-                                # Limpieza de fecha al guardar desde el editor
+                                # Limpieza directa e infalible de fecha al guardar desde el editor
                                 if "Fecha" in df_limpio.columns:
-                                    df_limpio["Fecha"] = pd.to_datetime(df_limpio["Fecha"], errors='coerce').dt.strftime('%Y-%m-%d').fillna(df_limpio["Fecha"].astype(str))
+                                    df_limpio["Fecha"] = (
+                                        df_limpio["Fecha"]
+                                        .astype(str)
+                                        .str.replace(" 00:00:00", "", regex=False)
+                                        .str.split(" ")
+                                        .str[0]
+                                        .str.strip()
+                                    )
                                 
                                 df_final_actualizado = pd.concat([df_otros_proyectos, df_limpio], ignore_index=True)
                                 df_final_actualizado = df_final_actualizado.loc[:, ~df_final_actualizado.columns.duplicated()]
