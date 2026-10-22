@@ -12,10 +12,24 @@ conn = st.connection("gsheets", type=GSheetsConnection)
 
 def cargar_historial_permanente():
     try:
-        df_hist = conn.read(worksheet="Historial_IDP", ttl="0")
+        # ttl=0 fuerza a leer directamente la versión más reciente en tiempo real
+        df_hist = conn.read(worksheet="Historial_IDP", ttl=0)
         if df_hist is not None and not df_hist.empty:
-            return df_hist.dropna(how="all")
-    except Exception:
+            df_hist = df_hist.dropna(how="all")
+
+            # Normalizar nombres de columnas para que coincidan con la estructura esperada
+            mapeo_renombrado = {
+                "Código": "Actividad",
+                "DETALLE": "Descripción",
+                "Costo Unitario": "Precio Unitario",
+                "Costo Total": "Monto Total",
+                "IDP": "IDP N°",
+                "Fec": "Fecha",
+                "Contrata": "Contratista",
+            }
+            df_hist = df_hist.rename(columns=mapeo_renombrado)
+            return df_hist
+    except Exception as e:
         pass
     return pd.DataFrame()
 
