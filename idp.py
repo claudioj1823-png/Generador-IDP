@@ -1,12 +1,13 @@
 import io
 import os
 import pandas as pd
+from streamlit_gsheets import GSheetsConnection
 import streamlit as st
 
 st.set_page_config(page_title="Generador de IDP", layout="wide")
 
 # --- CONEXIÓN A GOOGLE SHEETS PARA ALMACENAMIENTO PERMANENTE ---
-conn = st.connection("gsheets", type="gsheets")
+conn = st.connection("gsheets", type=GSheetsConnection)
 
 
 def cargar_historial_permanente():
