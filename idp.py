@@ -2,12 +2,11 @@ import io
 import os
 import pandas as pd
 import streamlit as st
-from streamlit_gsheets import GSheetsConnection
 
 st.set_page_config(page_title="Generador de IDP", layout="wide")
 
 # --- CONEXIÓN A GOOGLE SHEETS PARA ALMACENAMIENTO PERMANENTE ---
-conn = st.connection("gsheets", type=GSheetsConnection)
+conn = st.connection("gsheets", type="gsheets")
 
 
 def cargar_historial_permanente():
@@ -31,10 +30,7 @@ def guardar_historial_permanente(df_nuevo):
         conn.update(worksheet="Historial_IDP", data=df_final)
         return True
     except Exception as e:
-        st.error(
-            f"Error guardando en Google Sheets. Asegúrate de configurar las"
-            f" credenciales en Secrets: {e}"
-        )
+        st.error(f"Error guardando en Google Sheets: {e}")
         return False
 
 
