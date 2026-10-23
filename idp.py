@@ -6,14 +6,17 @@ import streamlit as st
 
 st.set_page_config(page_title="Generador de IDP", layout="wide")
 
-# --- CONEXIÓN A GOOGLE SHEETS PARA ALMACENAMIENTO PERMANENTE ---
+# --- CONEXIÓN A GOOGLE SHEETS (URL DIRECTA) ---
+URL_GSHEETS = "https://docs.google.com/spreadsheets/d/1uv-8bZLG8UtvhvpYt6FHOJaXoi6mtPcQB3aiR3zjir8"
 conn = st.connection("gsheets", type=GSheetsConnection)
 
 
 def cargar_historial_permanente():
     try:
-        # Forzar lectura directa sin caché
-        df_hist = conn.read(worksheet="Historial_IDP", ttl=0)
+        # Forzamos lectura directa con la URL y la pestaña exacta, sin caché (ttl=0)
+        df_hist = conn.read(
+            spreadsheet=URL_GSHEETS, worksheet="Historial_IDP", ttl=0
+        )
         if df_hist is not None and not df_hist.empty:
             df_hist = df_hist.dropna(how="all")
 
@@ -32,6 +35,23 @@ def cargar_historial_permanente():
     except Exception as e:
         st.error(f"Error conectando a Google Sheets: {e}")
     return pd.DataFrame()
+
+
+def guardar_historial_permanente(df_nuevo):
+    try:
+        df_existente = cargar_historial_permanente()
+        if df_existente is not None and not df_existente.empty:
+            df_final = pd.concat([df_existente, df_nuevo], ignore_index=True)
+        else:
+            df_final = df_nuevo
+        df_final = df_final.loc[:, ~df_final.columns.duplicated()]
+        conn.update(
+            spreadsheet=URL_GSHEETS, worksheet="Historial_IDP", data=df_final
+        )
+        return True
+    except Exception as e:
+        st.error(f"Error guardando en Google Sheets: {e}")
+        return False
 
 
 # Control de Acceso
@@ -417,31 +437,6 @@ if df is not None:
                     )
 
                 with col_exp2:
-                    def guardar_historial_permanente(df_nuevo):
-                        try:
-                            df_existente = cargar_historial_permanente()
-                            if (
-                                df_existente is not None
-                                and not df_existente.empty
-                            ):
-                                df_final = pd.concat(
-                                    [df_existente, df_nuevo], ignore_index=True
-                                )
-                            else:
-                                df_final = df_nuevo
-                            df_final = df_final.loc[
-                                :, ~df_final.columns.duplicated()
-                            ]
-                            conn.update(
-                                worksheet="Historial_IDP", data=df_final
-                            )
-                            return True
-                        except Exception as e:
-                            st.error(
-                                f"Error guardando en Google Sheets: {e}"
-                            )
-                            return False
-
                     if st.button("💾 Guardar IDP en el Historial General"):
                         df_guardar = df_idp.copy()
                         if (
@@ -490,16 +485,6 @@ st.markdown("---")
 st.subheader("🔍 Consultar Historial Consolidado por Proyecto")
 
 df_hist_total = cargar_historial_permanente()
-
-# --- DIAGNÓSTICO VISUAL TEMPORAL ---
-st.write(
-    "📊 *Estado de la conexión Google Sheets:* Filas leídas:"
-    f" {len(df_hist_total)}"
-)
-if not df_hist_total.empty:
-    st.write(
-        "Columnas detectadas:", list(df_hist_total.columns)
-    )  # Muestra qué columnas está leyendo
 
 if not df_hist_total.empty:
     df_hist_total = df_hist_total.loc[:, ~df_hist_total.columns.duplicated()]
@@ -592,7 +577,7 @@ if not df_hist_total.empty:
             "Monto Total": "Costo Total",
             "IDP N°": "IDP",
             "Fecha": "Fec",
-            "Contratista": "Contrata",
+            "Contrata": "Contrata",
             "Código Proyecto": "Código Proyecto",
             "Nombre Proyecto": "Nombre Proyecto",
         }
@@ -712,7 +697,9 @@ if not df_hist_total.empty:
                         )
 
                         conn.update(
-                            worksheet="Historial_IDP", data=df_final_actualizado
+                            spreadsheet=URL_GSHEETS,
+                            worksheet="Historial_IDP",
+                            data=df_final_actualizado,
                         )
                         st.success(
                             "¡Cambios actualizados permanentemente en Google"
@@ -724,4 +711,4 @@ else:
         "💡 Aún no hay registros en el historial general. Tan pronto guardes el"
         " primer IDP, podrás consultar los montos totales acumulados"
         " directamente aquí."
-    )
+    )         
