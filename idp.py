@@ -6,8 +6,11 @@ import streamlit as st
 
 st.set_page_config(page_title="Generador de IDP", layout="wide")
 
-# URL de exportación directa en CSV de tu Google Sheets
+# URL de exportación directa en CSV de tu Google Sheets (Historial de Mano de Obra)
 URL_SHEET_CSV = "https://docs.google.com/spreadsheets/d/1uv-8bZLG8UtvhvpYt6FHOJaXoi6mtPcQB3aiR3zjir8/gviz/tq?tqx=out:csv&sheet=Historial_IDP"
+
+# URL de exportación directa en CSV para el Historial de Materiales
+URL_SHEET_MAT_CSV = "https://docs.google.com/spreadsheets/d/1uv-8bZLG8UtvhvpYt6FHOJaXoi6mtPcQB3aiR3zjir8/gviz/tq?tqx=out:csv&sheet=Historial_Materiales"
 
 # URL de tu Aplicación Web de Google Apps Script para guardar datos de forma permanente
 URL_WEB_APP = "https://script.google.com/macros/s/AKfycbw4rtdaMyiLi3JquNCZoXaV-TFn7DkieE2sP_BuD-ZBFzdT4TjX2fLqMVn_JvN-P63o/exec"
@@ -32,6 +35,17 @@ def cargar_historial_permanente():
             return df_hist
     except Exception as e:
         st.error(f"Error al leer el historial: {e}")
+    return pd.DataFrame()
+
+
+def cargar_historial_materiales_permanente():
+    try:
+        df_mat = pd.read_csv(URL_SHEET_MAT_CSV)
+        if df_mat is not None and not df_mat.empty:
+            df_mat = df_mat.dropna(how="all")
+            return df_mat
+    except Exception as e:
+        pass
     return pd.DataFrame()
 
 
@@ -166,7 +180,7 @@ if df is not None:
     df["Actividad"] = df["Actividad"].fillna("").astype(str).str.strip()
     df["Contrata"] = df["Contrata"].fillna("").astype(str).str.strip()
 
-    # --- CABECERA SUPERIOR ---
+    # --- CABECERA SUPERIOR CON KEYS PARA LIMPIEZA ---
     col_cont, col_idp_num, col_fecha, col_proj = st.columns([2, 1.2, 1.5, 2.5])
 
     with col_cont:
@@ -177,7 +191,9 @@ if df is not None:
             "-- Seleccione la contrata --"
         ] + contratas_puras
         contrata_sel_menu = st.selectbox(
-            "Selecciona la Compañía Contratista:", opciones_contrata_menu
+            "Selecciona la Compañía Contratista:",
+            opciones_contrata_menu,
+            key="menu_contrata",
         )
         contrata_sel = (
             contrata_sel_menu
@@ -186,10 +202,12 @@ if df is not None:
         )
 
     with col_idp_num:
-        idp_numero = st.number_input("IDP N°:", min_value=1, value=1, step=1)
+        idp_numero = st.number_input(
+            "IDP N°:", min_value=1, value=1, step=1, key="menu_idp_num"
+        )
 
     with col_fecha:
-        fecha_idp = st.date_input("Fecha:")
+        fecha_idp = st.date_input("Fecha:", key="menu_fecha")
 
     with col_proj:
         lista_codigos = list(dict_proyectos.keys())
@@ -197,7 +215,9 @@ if df is not None:
             "-- Seleccione el proyecto --"
         ] + lista_codigos
         proyecto_sel_menu = st.selectbox(
-            "Código de Proyecto:", opciones_proyecto_menu
+            "Código de Proyecto:",
+            opciones_proyecto_menu,
+            key="menu_proyecto",
         )
         codigo_proyecto_sel = (
             proyecto_sel_menu
@@ -487,8 +507,14 @@ if df is not None:
                                     st.success(
                                         "¡IDP guardado con éxito en Google Sheets! 🎉"
                                     )
-                                    # 🧹 Limpieza automática y refresco de pantalla
+                                    # 🧹 LIMPIEZA TOTAL: Vaciamos lista y reseteamos menús superiores
                                     st.session_state.lista_idp = []
+                                    st.session_state["menu_contrata"] = (
+                                        "-- Seleccione la contrata --"
+                                    )
+                                    st.session_state["menu_proyecto"] = (
+                                        "-- Seleccione el proyecto --"
+                                    )
                                     st.rerun()
                                 elif res.get("duplicado"):
                                     st.warning(
@@ -506,6 +532,12 @@ if df is not None:
                 st.markdown("---")
                 if st.button("Limpiar Todo el IDP Actual"):
                     st.session_state.lista_idp = []
+                    st.session_state["menu_contrata"] = (
+                        "-- Seleccione la contrata --"
+                    )
+                    st.session_state["menu_proyecto"] = (
+                        "-- Seleccione el proyecto --"
+                    )
                     st.rerun()
 
 # ==========================================
@@ -515,6 +547,7 @@ st.markdown("---")
 st.subheader("🔍 Consultar Historial Consolidado por Proyecto")
 
 df_hist_total = cargar_historial_permanente()
+df_hist_mat_total = cargar_historial_materiales_permanente()
 
 if not df_hist_total.empty:
     df_hist_total = df_hist_total.loc[:, ~df_hist_total.columns.duplicated()]
@@ -681,6 +714,89 @@ if not df_hist_total.empty:
                     "Costo Total"
                 ].map(lambda x: f"${x:,.2f}")
                 st.dataframe(df_vistas_display, use_container_width=True)
+
+                # --- DESPLEGABLE DE MATERIALES INSTALADOS (SAP) EN EL HISTORIAL ---
+                with st.expander("🛠️ Ver Detalle de Materiales Instalados (SAP)"):
+                    if not df_hist_mat_total.empty:
+                        # Buscamos columnas de proyecto de forma flexible
+                        col_proj_mat = [
+                            c
+                            for c in df_hist_mat_total.columns
+                            if "proyecto" in c.lower() or "código" in c.lower()
+                        ]
+                        if col_proj_mat:
+                            c_p_m = col_proj_mat[0]
+                            df_mat_proj = df_hist_mat_total[
+                                df_hist_mat_total[c_p_m].astype(str).str.strip()
+                                == str(proj_seleccionado).strip()
+                            ].copy()
+
+                            if not df_mat_proj.empty:
+                                # Agrupamos materiales históricos por su código SAP y descripción para dar un consolidado total del proyecto
+                                cols_mat_sap = [
+                                    c
+                                    for c in df_mat_proj.columns
+                                    if "sap" in c.lower()
+                                    or "código" in c.lower()
+                                ]
+                                cols_mat_desc = [
+                                    c
+                                    for c in df_mat_proj.columns
+                                    if "descripci" in c.lower()
+                                    or "material" in c.lower()
+                                ]
+                                cols_mat_cant = [
+                                    c
+                                    for c in df_mat_proj.columns
+                                    if "cant" in c.lower()
+                                ]
+
+                                if cols_mat_sap and cols_mat_cant:
+                                    cs_sap = cols_mat_sap[0]
+                                    cs_cant = cols_mat_cant[0]
+                                    cs_desc = (
+                                        cols_mat_desc[0]
+                                        if cols_mat_desc
+                                        else cs_sap
+                                    )
+
+                                    df_mat_proj[cs_cant] = pd.to_numeric(
+                                        df_mat_proj[cs_cant], errors="coerce"
+                                    ).fillna(0)
+                                    df_mat_cons = (
+                                        df_mat_proj.groupby(
+                                            [cs_sap, cs_desc], as_index=False
+                                        )[cs_cant]
+                                        .sum()
+                                        .rename(
+                                            columns={
+                                                cs_sap: "Código SAP",
+                                                cs_desc: (
+                                                    "Descripción de Material"
+                                                ),
+                                                cs_cant: "Cantidad Total",
+                                            }
+                                        )
+                                    )
+                                    st.dataframe(
+                                        df_mat_cons, use_container_width=True
+                                    )
+                                else:
+                                    st.dataframe(
+                                        df_mat_proj, use_container_width=True
+                                    )
+                            else:
+                                st.info(
+                                    "No hay registros de materiales asociados a este proyecto en el historial."
+                                )
+                        else:
+                            st.info(
+                                "La pestaña Historial_Materiales no contiene una columna de proyecto identificable."
+                            )
+                    else:
+                        st.info(
+                            "La pestaña Historial_Materiales está vacía o no se pudo cargar."
+                        )
 else:
     st.info(
         "💡 No se pudieron cargar los registros o la hoja está vacía. Verifica"
