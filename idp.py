@@ -485,13 +485,14 @@ if df is not None:
                                 )
                                 if res.get("ok"):
                                     st.success(
-                                        "¡IDP guardado con éxito en Google"
-                                        " Sheets! 🎉"
+                                        "¡IDP guardado con éxito en Google Sheets! 🎉"
                                     )
+                                    # 🧹 Limpieza automática y refresco de pantalla
+                                    st.session_state.lista_idp = []
+                                    st.rerun()
                                 elif res.get("duplicado"):
                                     st.warning(
-                                        "⚠️ Este IDP ya fue registrado"
-                                        " anteriormente."
+                                        "⚠️ Este IDP ya fue registrado anteriormente."
                                     )
                                 else:
                                     st.error(
@@ -499,8 +500,7 @@ if df is not None:
                                     )
                         else:
                             st.warning(
-                                "No hay actividades en el IDP actual para"
-                                " guardar."
+                                "No hay actividades en el IDP actual para guardar."
                             )
 
                 st.markdown("---")
