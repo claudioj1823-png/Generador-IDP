@@ -715,10 +715,9 @@ if not df_hist_total.empty:
                 ].map(lambda x: f"${x:,.2f}")
                 st.dataframe(df_vistas_display, use_container_width=True)
 
-                # --- DESPLEGABLE DE MATERIALES INSTALADOS (SAP) EN EL HISTORIAL ---
+                # --- DESPLEGABLE DE MATERIALES INSTALADOS (SAP) EN EL HISTORIAL (CORREGIDO) ---
                 with st.expander("🛠️ Ver Detalle de Materiales Instalados (SAP)"):
                     if not df_hist_mat_total.empty:
-                        # Buscamos columnas de proyecto de forma flexible
                         col_proj_mat = [
                             c
                             for c in df_hist_mat_total.columns
@@ -732,13 +731,20 @@ if not df_hist_total.empty:
                             ].copy()
 
                             if not df_mat_proj.empty:
-                                # Agrupamos materiales históricos por su código SAP y descripción para dar un consolidado total del proyecto
+                                # Búsqueda estricta del Código SAP real
                                 cols_mat_sap = [
                                     c
                                     for c in df_mat_proj.columns
                                     if "sap" in c.lower()
-                                    or "código" in c.lower()
                                 ]
+                                if not cols_mat_sap:
+                                    cols_mat_sap = [
+                                        c
+                                        for c in df_mat_proj.columns
+                                        if "código" in c.lower()
+                                        and "proyecto" not in c.lower()
+                                    ]
+
                                 cols_mat_desc = [
                                     c
                                     for c in df_mat_proj.columns
