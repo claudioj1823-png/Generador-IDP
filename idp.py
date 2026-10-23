@@ -11,7 +11,7 @@ URL_SHEET_CSV = "https://docs.google.com/spreadsheets/d/1uv-8bZLG8UtvhvpYt6FHOJa
 
 # URL de tu Aplicación Web de Google Apps Script para guardar datos de forma permanente
 URL_WEB_APP = "https://script.google.com/macros/s/AKfycbw4rtdaMyiLi3JquNCZoXaV-TFn7DkieE2sP_BuD-ZBFzdT4TjX2fLqMVn_JvN-P63o/exec"
-TOKEN_SECRETO = "proyecto2026"
+TOKEN_SECRETO = "proyectos2026"
 
 
 def cargar_historial_permanente():
