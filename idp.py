@@ -1,17 +1,21 @@
 import io
 import os
 import pandas as pd
+import requests
 import streamlit as st
 
 st.set_page_config(page_title="Generador de IDP", layout="wide")
 
-# URL de exportación directa en CSV de tu Google Sheets (¡Funciona con enlaces públicos sin cuentas de servicio!)
+# URL de exportación directa en CSV de tu Google Sheets
 URL_SHEET_CSV = "https://docs.google.com/spreadsheets/d/1uv-8bZLG8UtvhvpYt6FHOJaXoi6mtPcQB3aiR3zjir8/gviz/tq?tqx=out:csv&sheet=Historial_IDP"
+
+# URL de tu Aplicación Web de Google Apps Script para guardar datos de forma permanente
+URL_WEB_APP = "https://script.google.com/macros/s/AKfycbw4rtdaMyiLi3JquNCZoXaV-TFn7DkieE2sP_BuD-ZBFzdT4TjX2fLqMVn_JvN-P63o/exec"
+TOKEN_SECRETO = "edeeste2026tokenseguro"
 
 
 def cargar_historial_permanente():
     try:
-        # Lee directamente los datos públicos en tiempo real
         df_hist = pd.read_csv(URL_SHEET_CSV)
         if df_hist is not None and not df_hist.empty:
             df_hist = df_hist.dropna(how="all")
@@ -31,14 +35,71 @@ def cargar_historial_permanente():
     return pd.DataFrame()
 
 
-def guardar_historial_permanente(df_nuevo):
-    # Nota: Para guardar de forma persistente con este método,
-    # el guardado en la nube se gestiona o se descarga el Excel consolidado.
-    st.info(
-        "💡 Para mantener el respaldo seguro, puedes descargar tu IDP consolidado"
-        " en Excel."
-    )
-    return True
+def guardar_idp_en_google_sheets(
+    df_idp, df_resumen, idp_numero, fecha_idp, codigo_proyecto, contrata_sel
+):
+    nombre_proyecto_val = dict_proyectos.get(codigo_proyecto, codigo_proyecto)
+    clave_unica = f"{codigo_proyecto}_{idp_numero}_{contrata_sel}_{fecha_idp}"
+
+    actividades_data = []
+    for _, row in df_idp.iterrows():
+        actividades_data.append({
+            "Código": str(row.get("Actividad", "")),
+            "DETALLE": str(row.get("Descripción", "")),
+            "Costo Unitario": float(
+                str(row.get("Precio Unitario", 0))
+                .replace("$", "")
+                .replace(",", "")
+                or 0
+            ),
+            "Cantidad": float(row.get("Cantidad", 0) or 0),
+            "Costo Total": float(
+                str(row.get("Monto Total", 0))
+                .replace("$", "")
+                .replace(",", "")
+                or 0
+            ),
+            "IDP": int(idp_numero),
+            "Fec": str(fecha_idp),
+            "Contrata": str(contrata_sel),
+            "Código Proyecto": str(codigo_proyecto),
+            "Nombre Proyecto": str(nombre_proyecto_val),
+        })
+
+    materiales_data = []
+    if not df_resumen.empty:
+        for _, row in df_resumen.iterrows():
+            materiales_data.append({
+                "IDP": int(idp_numero),
+                "Fec": str(fecha_idp),
+                "Código Proyecto": str(codigo_proyecto),
+                "Nombre Proyecto": str(nombre_proyecto_val),
+                "Contrata": str(contrata_sel),
+                "Código SAP": str(row.get("Código SAP", "")),
+                "Descripción de Material": str(
+                    row.get("Descripción de Material", "")
+                ),
+                "Unidad": str(row.get("Unidad", "")),
+                "Cantidad Total": float(row.get("Cantidad Total", 0) or 0),
+            })
+
+    payload = {
+        "token": TOKEN_SECRETO,
+        "clave": clave_unica,
+        "numero": int(idp_numero),
+        "fecha": str(fecha_idp),
+        "proyecto": str(codigo_proyecto),
+        "contratista": str(contrata_sel),
+        "actividades": actividades_data,
+        "materiales": materiales_data,
+    }
+
+    try:
+        response = requests.post(URL_WEB_APP, json=payload, timeout=30)
+        resultado = response.json()
+        return resultado
+    except Exception as e:
+        return {"ok": False, "mensaje": str(e)}
 
 
 # Control de Acceso
@@ -59,8 +120,7 @@ if not st.session_state.autenticado:
 
 st.title("Generador de IDP (Informe Diario de Producción)")
 st.write(
-    "Calcula montos por contratista, proyecto y materiales excluyendo"
-    " actividades sin insumos de almacén."
+    "Calcula montos por contratista, proyecto y materiales excluyendo actividades sin insumos de almacén."
 )
 
 
@@ -150,14 +210,11 @@ if df is not None:
             codigo_proyecto_sel, "Proyecto No Encontrado"
         )
         st.info(
-            f"**Contratista:** {contrata_sel}  |  **Proyecto Seleccionado:**"
-            f" {nombre_proyecto_sel}  |  **IDP N°:** {idp_numero}  | "
-            f" **Fecha:** {fecha_idp}"
+            f"**Contratista:** {contrata_sel}  |  **Proyecto Seleccionado:** {nombre_proyecto_sel}  |  **IDP N°:** {idp_numero}  |  **Fecha:** {fecha_idp}"
         )
     else:
         st.info(
-            "💡 **Por favor, seleccione tanto la Compañía Contratista como el"
-            " Código de Proyecto arriba para continuar.**"
+            "💡 **Por favor, seleccione tanto la Compañía Contratista como el Código de Proyecto arriba para continuar.**"
         )
 
     st.markdown("---")
@@ -255,8 +312,7 @@ if df is not None:
                 with col_del1:
                     opciones_filas = list(range(1, len(df_idp) + 1))
                     fila_a_borrar = st.selectbox(
-                        "Selecciona el número de fila de la estructura a"
-                        " eliminar:",
+                        "Selecciona el número de fila de la estructura a eliminar:",
                         options=opciones_filas,
                     )
 
@@ -382,8 +438,7 @@ if df is not None:
                         st.dataframe(df_filtrado, use_container_width=True)
                 else:
                     st.info(
-                        "No hay materiales asociados a las actividades"
-                        " seleccionadas."
+                        "No hay materiales asociados a las actividades seleccionadas."
                     )
 
                 st.markdown("---")
@@ -418,10 +473,35 @@ if df is not None:
 
                 with col_exp2:
                     if st.button("💾 Guardar IDP en el Historial General"):
-                        st.success(
-                            "¡IDP generado! Puedes descargar el Excel para"
-                            " respaldar el consolidado."
-                        )
+                        if not df_idp.empty:
+                            with st.spinner("Guardando IDP en la nube..."):
+                                res = guardar_idp_en_google_sheets(
+                                    df_idp,
+                                    df_resumen,
+                                    idp_numero,
+                                    fecha_idp,
+                                    codigo_proyecto_sel,
+                                    contrata_sel,
+                                )
+                                if res.get("ok"):
+                                    st.success(
+                                        "¡IDP guardado con éxito en Google"
+                                        " Sheets! 🎉"
+                                    )
+                                elif res.get("duplicado"):
+                                    st.warning(
+                                        "⚠️ Este IDP ya fue registrado"
+                                        " anteriormente."
+                                    )
+                                else:
+                                    st.error(
+                                        f"Error al guardar: {res.get('mensaje')}"
+                                    )
+                        else:
+                            st.warning(
+                                "No hay actividades en el IDP actual para"
+                                " guardar."
+                            )
 
                 st.markdown("---")
                 if st.button("Limpiar Todo el IDP Actual"):
@@ -511,6 +591,7 @@ if not df_hist_total.empty:
         df_hist_total["Precio Unitario"] * df_hist_total["Cantidad"]
     )
 
+
     def formatear_columnas_tabla(df_in):
         df_fmt = df_in.copy()
         df_fmt = df_fmt.loc[:, ~df_fmt.columns.duplicated()]
@@ -547,6 +628,7 @@ if not df_hist_total.empty:
         cols_existentes = [c for c in orden_columnas if c in df_fmt.columns]
         otras = [c for c in df_fmt.columns if c not in cols_existentes]
         return df_fmt[cols_existentes + otras]
+
 
     if "Código Proyecto" in df_hist_total.columns:
         proyectos_guardados = (
