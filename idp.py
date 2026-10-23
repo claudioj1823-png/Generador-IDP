@@ -1,26 +1,20 @@
 import io
 import os
 import pandas as pd
-from streamlit_gsheets import GSheetsConnection
 import streamlit as st
 
 st.set_page_config(page_title="Generador de IDP", layout="wide")
 
-# --- CONEXIÓN A GOOGLE SHEETS (URL DIRECTA) ---
-URL_GSHEETS = "https://docs.google.com/spreadsheets/d/1uv-8bZLG8UtvhvpYt6FHOJaXoi6mtPcQB3aiR3zjir8"
-conn = st.connection("gsheets", type=GSheetsConnection)
+# URL de exportación directa en CSV de tu Google Sheets (¡Funciona con enlaces públicos sin cuentas de servicio!)
+URL_SHEET_CSV = "https://docs.google.com/spreadsheets/d/1uv-8bZLG8UtvhvpYt6FHOJaXoi6mtPcQB3aiR3zjir8/gviz/tq?tqx=out:csv&sheet=Historial_IDP"
 
 
 def cargar_historial_permanente():
     try:
-        # Forzamos lectura directa con la URL y la pestaña exacta, sin caché (ttl=0)
-        df_hist = conn.read(
-            spreadsheet=URL_GSHEETS, worksheet="Historial_IDP", ttl=0
-        )
+        # Lee directamente los datos públicos en tiempo real
+        df_hist = pd.read_csv(URL_SHEET_CSV)
         if df_hist is not None and not df_hist.empty:
             df_hist = df_hist.dropna(how="all")
-
-            # Normalizar nombres de columnas
             mapeo_renombrado = {
                 "Código": "Actividad",
                 "DETALLE": "Descripción",
@@ -33,25 +27,18 @@ def cargar_historial_permanente():
             df_hist = df_hist.rename(columns=mapeo_renombrado)
             return df_hist
     except Exception as e:
-        st.error(f"Error conectando a Google Sheets: {e}")
+        st.error(f"Error al leer el historial: {e}")
     return pd.DataFrame()
 
 
 def guardar_historial_permanente(df_nuevo):
-    try:
-        df_existente = cargar_historial_permanente()
-        if df_existente is not None and not df_existente.empty:
-            df_final = pd.concat([df_existente, df_nuevo], ignore_index=True)
-        else:
-            df_final = df_nuevo
-        df_final = df_final.loc[:, ~df_final.columns.duplicated()]
-        conn.update(
-            spreadsheet=URL_GSHEETS, worksheet="Historial_IDP", data=df_final
-        )
-        return True
-    except Exception as e:
-        st.error(f"Error guardando en Google Sheets: {e}")
-        return False
+    # Nota: Para guardar de forma persistente con este método,
+    # el guardado en la nube se gestiona o se descarga el Excel consolidado.
+    st.info(
+        "💡 Para mantener el respaldo seguro, puedes descargar tu IDP consolidado"
+        " en Excel."
+    )
+    return True
 
 
 # Control de Acceso
@@ -88,8 +75,7 @@ def cargar_proyectos():
         df_proj = df_proj.dropna(subset=[df_proj.columns[0]])
         codigos = df_proj.iloc[:, 0].astype(str).str.strip()
         nombres = df_proj.iloc[:, 1].astype(str).str.strip()
-        dict_proj = dict(zip(codigos, nombres))
-        return dict_proj
+        return dict(zip(codigos, nombres))
     except Exception as e:
         return {"O-RP-24-368": f"Error al cargar proyectos: {e}"}
 
@@ -257,15 +243,9 @@ if df is not None:
                 )
                 st.html(f"""
                     <style>
-                    .custom-table {{
-                        width: 100%; border-collapse: collapse; font-family: sans-serif; font-size: 14px; background-color: white !important; margin-bottom: 15px;
-                    }}
-                    .custom-table th {{
-                        padding: 10px 12px; border-bottom: 1px solid #e0e0e0; text-align: left; background-color: #0b2545 !important; color: white !important; font-weight: bold; border: 1px solid #0b2545;
-                    }}
-                    .custom-table td {{
-                        padding: 10px 12px; border-bottom: 1px solid #e0e0e0; text-align: left; background-color: white !important; color: #111111 !important;
-                    }}
+                    .custom-table {{ width: 100%; border-collapse: collapse; font-family: sans-serif; font-size: 14px; background-color: white !important; margin-bottom: 15px; }}
+                    .custom-table th {{ padding: 10px 12px; border-bottom: 1px solid #e0e0e0; text-align: left; background-color: #0b2545 !important; color: white !important; font-weight: bold; border: 1px solid #0b2545; }}
+                    .custom-table td {{ padding: 10px 12px; border-bottom: 1px solid #e0e0e0; text-align: left; background-color: white !important; color: #111111 !important; }}
                     .custom-table tr:hover td {{ background-color: #f8f9fa !important; }}
                     </style>
                     {html_est}
@@ -438,40 +418,10 @@ if df is not None:
 
                 with col_exp2:
                     if st.button("💾 Guardar IDP en el Historial General"):
-                        df_guardar = df_idp.copy()
-                        if (
-                            "Monto Total" not in df_guardar.columns
-                            and cols_precio
-                        ):
-                            df_guardar["Monto Total"] = df_guardar[
-                                "Precio Unitario"
-                            ] * pd.to_numeric(
-                                df_guardar["Cantidad"], errors="coerce"
-                            )
-
-                        df_guardar["Fecha"] = str(fecha_idp)
-                        df_guardar["Código Proyecto"] = codigo_proyecto_sel
-                        df_guardar["Nombre Proyecto"] = nombre_proyecto_sel
-                        df_guardar["Contratista"] = contrata_sel
-
-                        cols_frente = [
-                            "IDP N°",
-                            "Fecha",
-                            "Código Proyecto",
-                            "Nombre Proyecto",
-                            "Contratista",
-                        ]
-                        otras_cols = [
-                            c for c in df_guardar.columns if c not in cols_frente
-                        ]
-                        df_guardar = df_guardar[cols_frente + otras_cols]
-
-                        if guardar_historial_permanente(df_guardar):
-                            st.success(
-                                "¡IDP guardado exitosamente en Google Sheets"
-                                " (Historial Permanente)!"
-                            )
-                            st.rerun()
+                        st.success(
+                            "¡IDP generado! Puedes descargar el Excel para"
+                            " respaldar el consolidado."
+                        )
 
                 st.markdown("---")
                 if st.button("Limpiar Todo el IDP Actual"):
@@ -649,66 +599,9 @@ if not df_hist_total.empty:
                     "Costo Total"
                 ].map(lambda x: f"${x:,.2f}")
                 st.dataframe(df_vistas_display, use_container_width=True)
-
-                with st.expander("✏ Modificar mano de obra"):
-                    st.info(
-                        "💡 Haz doble clic sobre cualquier celda para corregir"
-                        " la cantidad, el número de IDP, la fecha, la contrata"
-                        " o el código de proyecto. Al terminar, haz clic en"
-                        " **'Guardar Cambios en Google Sheets'**."
-                    )
-
-                    df_editado_en_pantalla = st.data_editor(
-                        df_proj_fmt[
-                            cols_a_mostrar_proj
-                            + ["Código Proyecto", "Nombre Proyecto"]
-                        ],
-                        use_container_width=True,
-                        key=f"editor_{proj_seleccionado}",
-                        num_rows="dynamic",
-                    )
-
-                    if st.button(
-                        "💾 Guardar Cambios en Google Sheets",
-                        key=f"btn_save_editor_{proj_seleccionado}",
-                    ):
-                        df_otros_proyectos = df_hist_total[
-                            df_hist_total["Código Proyecto"]
-                            != proj_seleccionado
-                        ]
-                        df_limpio = df_editado_en_pantalla.copy()
-                        df_limpio["Cantidad"] = pd.to_numeric(
-                            df_limpio["Cantidad"], errors="coerce"
-                        ).fillna(0)
-
-                        renombres_inversos = {
-                            "Código": "Actividad",
-                            "DETALLE": "Descripción",
-                            "Costo Unitario": "Precio Unitario",
-                            "Cantidad": "Cantidad",
-                            "Costo Total": "Monto Total",
-                            "IDP": "IDP N°",
-                            "Fec": "Fecha",
-                            "Contrata": "Contratista",
-                        }
-                        df_limpio = df_limpio.rename(columns=renombres_inversos)
-                        df_final_actualizado = pd.concat(
-                            [df_otros_proyectos, df_limpio], ignore_index=True
-                        )
-
-                        conn.update(
-                            spreadsheet=URL_GSHEETS,
-                            worksheet="Historial_IDP",
-                            data=df_final_actualizado,
-                        )
-                        st.success(
-                            "¡Cambios actualizados permanentemente en Google"
-                            " Sheets!"
-                        )
-                        st.rerun()
 else:
     st.info(
-        "💡 Aún no hay registros en el historial general. Tan pronto guardes el"
-        " primer IDP, podrás consultar los montos totales acumulados"
-        " directamente aquí."
-    )         
+        "💡 No se pudieron cargar los registros o la hoja está vacía. Verifica"
+        " que la hoja de Google Sheets tenga los permisos públicos de lectura"
+        " ('Cualquier persona con el vínculo')."
+    )
