@@ -132,6 +132,16 @@ if not st.session_state.autenticado:
             st.error("Usuario o contraseña incorrectos")
     st.stop()
 
+# --- GESTIÓN DE RESETEO DE ESTADO (EVITA EL ERROR DE WIDGETS) ---
+if "reset_form" not in st.session_state:
+    st.session_state.reset_form = False
+
+if st.session_state.reset_form:
+    st.session_state.lista_idp = []
+    st.session_state["menu_contrata"] = "-- Seleccione la contrata --"
+    st.session_state["menu_proyecto"] = "-- Seleccione el proyecto --"
+    st.session_state.reset_form = False
+
 st.title("Generador de IDP (Informe Diario de Producción)")
 st.write(
     "Calcula montos por contratista, proyecto y materiales excluyendo actividades sin insumos de almacén."
@@ -180,7 +190,7 @@ if df is not None:
     df["Actividad"] = df["Actividad"].fillna("").astype(str).str.strip()
     df["Contrata"] = df["Contrata"].fillna("").astype(str).str.strip()
 
-    # --- CABECERA SUPERIOR CON KEYS PARA LIMPIEZA ---
+    # --- CABECERA SUPERIOR CON KEYS ---
     col_cont, col_idp_num, col_fecha, col_proj = st.columns([2, 1.2, 1.5, 2.5])
 
     with col_cont:
@@ -507,14 +517,8 @@ if df is not None:
                                     st.success(
                                         "¡IDP guardado con éxito en Google Sheets! 🎉"
                                     )
-                                    # 🧹 LIMPIEZA TOTAL: Vaciamos lista y reseteamos menús superiores
-                                    st.session_state.lista_idp = []
-                                    st.session_state["menu_contrata"] = (
-                                        "-- Seleccione la contrata --"
-                                    )
-                                    st.session_state["menu_proyecto"] = (
-                                        "-- Seleccione el proyecto --"
-                                    )
+                                    # Activamos la bandera de reseteo de forma segura
+                                    st.session_state.reset_form = True
                                     st.rerun()
                                 elif res.get("duplicado"):
                                     st.warning(
@@ -531,13 +535,7 @@ if df is not None:
 
                 st.markdown("---")
                 if st.button("Limpiar Todo el IDP Actual"):
-                    st.session_state.lista_idp = []
-                    st.session_state["menu_contrata"] = (
-                        "-- Seleccione la contrata --"
-                    )
-                    st.session_state["menu_proyecto"] = (
-                        "-- Seleccione el proyecto --"
-                    )
+                    st.session_state.reset_form = True
                     st.rerun()
 
 # ==========================================
@@ -715,7 +713,7 @@ if not df_hist_total.empty:
                 ].map(lambda x: f"${x:,.2f}")
                 st.dataframe(df_vistas_display, use_container_width=True)
 
-                # --- DESPLEGABLE DE MATERIALES INSTALADOS (SAP) EN EL HISTORIAL (CORREGIDO) ---
+                # --- DESPLEGABLE DE MATERIALES INSTALADOS (SAP) EN EL HISTORIAL ---
                 with st.expander("🛠️ Ver Detalle de Materiales Instalados (SAP)"):
                     if not df_hist_mat_total.empty:
                         col_proj_mat = [
@@ -797,7 +795,7 @@ if not df_hist_total.empty:
                                 )
                         else:
                             st.info(
-                                "La pestaña Historial_Materiales no contiene una columna de proyecto identificable."
+                                "La pestaña Historial_Materiales não contiene una columna de proyecto identificable."
                             )
                     else:
                         st.info(
