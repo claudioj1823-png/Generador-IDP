@@ -794,7 +794,7 @@ if not df_hist_total.empty:
                                 )
                         else:
                             st.info(
-                                "La pestaña Historial_Materiales não contiene una columna de proyecto identificable."
+                                "La pestaña Historial_Materiales no contiene una columna de proyecto identificable."
                             )
                     else:
                         st.info(
@@ -859,12 +859,15 @@ st.caption(
 )
 
 if df is not None and not df.empty:
-    contratistas_fotos = sorted(
+    contratistas_base = sorted(
         str(c).strip()
         for c in df["Contrata"].dropna().unique()
         if str(c).strip() and str(c).strip().lower() != "nan"
     )
-    proyectos_fotos = sorted(str(c).strip() for c in dict_proyectos.keys())
+    opciones_contratistas_fotos = ["-- Seleccione la contrata --"] + contratistas_base
+
+    proyectos_base = sorted(str(c).strip() for c in dict_proyectos.keys())
+    opciones_proyectos_fotos = ["-- Seleccione el proyecto --"] + proyectos_base
 
     with st.expander("➕ Cargar fotografías a un IDP ya guardado", expanded=False):
         col_f1, col_f2, col_f3 = st.columns([1, 2, 2])
@@ -873,13 +876,15 @@ if df is not None and not df.empty:
                 "Número de IDP", min_value=1, value=1, step=1, key="foto_numero_idp"
             )
         with col_f2:
-            proyecto_fotos = st.selectbox(
-                "Código de proyecto", proyectos_fotos, key="foto_proyecto_idp"
+            proyecto_sel_menu = st.selectbox(
+                "Código de proyecto", opciones_proyectos_fotos, key="foto_proyecto_idp"
             )
+            proyecto_fotos = proyecto_sel_menu if proyecto_sel_menu != "-- Seleccione el proyecto --" else None
         with col_f3:
-            contratista_fotos = st.selectbox(
-                "Contratista", contratistas_fotos, key="foto_contratista_idp"
+            contrata_sel_menu = st.selectbox(
+                "Contratista", opciones_contratistas_fotos, key="foto_contratista_idp"
             )
+            contratista_fotos = contrata_sel_menu if contrata_sel_menu != "-- Seleccione la contrata --" else None
 
         # Estado para limpiar el file_uploader de forma dinámica tras una subida exitosa
         if "file_uploader_key" not in st.session_state:
@@ -903,7 +908,9 @@ if df is not None and not df.empty:
                 st.warning("El tamaño total supera 10 MB. Reduce la cantidad o el tamaño de las fotografías.")
 
         if st.button("📤 Subir fotografías al IDP", key="btn_subir_fotos_idp"):
-            if not archivos_fotos:
+            if not proyecto_fotos or not contratista_fotos:
+                st.warning("⚠️ Por favor, selecciona un Código de proyecto y una Contratista válidos.")
+            elif not archivos_fotos:
                 st.warning("Selecciona al menos una fotografía.")
             elif total_bytes > 10 * 1024 * 1024:
                 st.error("No se pueden enviar más de 10 MB en una sola carga.")
@@ -931,41 +938,46 @@ if df is not None and not df.empty:
                 key="consulta_foto_numero"
             )
         with col_c2:
-            proyecto_consulta_fotos = st.selectbox(
-                "Código de proyecto a consultar", proyectos_fotos,
+            proyecto_consulta_menu = st.selectbox(
+                "Código de proyecto a consultar", opciones_proyectos_fotos,
                 key="consulta_foto_proyecto"
             )
+            proyecto_consulta_fotos = proyecto_consulta_menu if proyecto_consulta_menu != "-- Seleccione el proyecto --" else None
         with col_c3:
-            contratista_consulta_fotos = st.selectbox(
-                "Contratista a consultar", contratistas_fotos,
+            contratista_consulta_menu = st.selectbox(
+                "Contratista a consultar", opciones_contratistas_fotos,
                 key="consulta_foto_contratista"
             )
+            contratista_consulta_fotos = contratista_consulta_menu if contratista_consulta_menu != "-- Seleccione la contrata --" else None
 
         if st.button("Buscar fotografías", key="btn_consultar_fotos_idp"):
-            with st.spinner("Consultando archivo fotográfico..."):
-                consulta_fotos = consultar_fotos_idp(
-                    numero_consulta_fotos,
-                    proyecto_consulta_fotos,
-                    contratista_consulta_fotos,
-                )
-
-            if consulta_fotos.get("ok"):
-                lista_fotos = consulta_fotos.get("fotos", [])
-                if lista_fotos:
-                    st.success(f"Se encontraron {len(lista_fotos)} fotografía(s).")
-                    for i, foto in enumerate(lista_fotos, start=1):
-                        nombre_foto = foto.get("nombre") or foto.get("name") or f"Fotografía {i}"
-                        enlace_foto = (
-                            foto.get("url") or foto.get("driveUrl") or
-                            foto.get("enlace") or foto.get("URL")
-                        )
-                        if enlace_foto:
-                            st.markdown(f"{i}. **{nombre_foto}** — [Abrir fotografía]({enlace_foto})")
-                        else:
-                            st.write(f"{i}. {nombre_foto} (sin enlace disponible en la respuesta)")
-                else:
-                    st.info("No hay fotografías registradas para ese IDP, proyecto y contratista.")
+            if not proyecto_consulta_fotos or not contratista_consulta_fotos:
+                st.warning("⚠️ Por favor, selecciona un Código de proyecto y una Contratista válidos para consultar.")
             else:
-                st.error(consulta_fotos.get("mensaje", "No fue posible consultar las fotografías."))
+                with st.spinner("Consultando archivo fotográfico..."):
+                    consulta_fotos = consultar_fotos_idp(
+                        numero_consulta_fotos,
+                        proyecto_consulta_fotos,
+                        contratista_consulta_fotos,
+                    )
+
+                if consulta_fotos.get("ok"):
+                    lista_fotos = consulta_fotos.get("fotos", [])
+                    if lista_fotos:
+                        st.success(f"Se encontraron {len(lista_fotos)} fotografía(s).")
+                        for i, foto in enumerate(lista_fotos, start=1):
+                            nombre_foto = foto.get("nombre") or foto.get("name") or f"Fotografía {i}"
+                            enlace_foto = (
+                                foto.get("url") or foto.get("driveUrl") or
+                                foto.get("enlace") or foto.get("URL")
+                            )
+                            if enlace_foto:
+                                st.markdown(f"{i}. **{nombre_foto}** — [Abrir fotografía]({enlace_foto})")
+                            else:
+                                st.write(f"{i}. {nombre_foto} (sin enlace disponible en la respuesta)")
+                    else:
+                        st.info("No hay fotografías registradas para ese IDP, proyecto y contratista.")
+                else:
+                    st.error(consulta_fotos.get("mensaje", "No fue posible consultar las fotografías."))
 else:
     st.info("El archivo de actividades no está disponible; no se pudo cargar el módulo fotográfico.")
