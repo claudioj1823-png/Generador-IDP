@@ -523,7 +523,7 @@ if df is not None:
                                     st.rerun()
                                 elif res.get("duplicado"):
                                     st.warning(
-                                        ⚠️ Este IDP ya fue registrado anteriormente."
+                                        "⚠️ Este IDP ya fue registrado anteriormente."
                                     )
                                 else:
                                     st.error(
