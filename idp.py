@@ -518,7 +518,6 @@ if df is not None:
                                     st.success(
                                         "¡IDP guardado con éxito en Google Sheets! 🎉"
                                     )
-                                    # Activamos la bandera de reseteo de forma segura
                                     st.session_state.reset_form = True
                                     st.rerun()
                                 elif res.get("duplicado"):
@@ -730,7 +729,6 @@ if not df_hist_total.empty:
                             ].copy()
 
                             if not df_mat_proj.empty:
-                                # Búsqueda estricta del Código SAP real
                                 cols_mat_sap = [
                                     c
                                     for c in df_mat_proj.columns
@@ -883,13 +881,18 @@ if df is not None and not df.empty:
                 "Contratista", contratistas_fotos, key="foto_contratista_idp"
             )
 
+        # Estado para limpiar el file_uploader de forma dinámica tras una subida exitosa
+        if "file_uploader_key" not in st.session_state:
+            st.session_state.file_uploader_key = 0
+
         archivos_fotos = st.file_uploader(
             "Selecciona las fotografías (JPG o PNG)",
             type=["jpg", "jpeg", "png"],
             accept_multiple_files=True,
-            key="cargar_fotos_idp",
+            key=f"cargar_fotos_idp_{st.session_state.file_uploader_key}",
         )
 
+        total_bytes = 0
         if archivos_fotos:
             total_bytes = sum(len(a.getvalue()) for a in archivos_fotos)
             st.caption(
@@ -909,15 +912,16 @@ if df is not None and not df.empty:
                     resultado_fotos = enviar_fotos_idp(
                         numero_fotos, proyecto_fotos, contratista_fotos, archivos_fotos
                     )
-                if resultado_fotos.get("ok"):
+                
+                if isinstance(resultado_fotos, dict) and (resultado_fotos.get("ok") == True or resultado_fotos.get("status") == "success"):
                     st.success(
-                        resultado_fotos.get("mensaje", "Fotografías guardadas correctamente en Google Drive.")
+                        resultado_fotos.get("mensaje", "¡Fotografías guardadas correctamente en Google Drive! 🎉")
                     )
+                    st.session_state.file_uploader_key += 1
                     st.rerun()
                 else:
-                    st.error(
-                        resultado_fotos.get("mensaje", "No fue posible guardar las fotografías.")
-                    )
+                    mensaje_error = resultado_fotos.get("mensaje") if isinstance(resultado_fotos, dict) else "Respuesta inválida del servidor."
+                    st.error(f"No fue posible guardar las fotografías: {mensaje_error}")
 
     with st.expander("🔎 Consultar fotografías de un IDP", expanded=False):
         col_c1, col_c2, col_c3 = st.columns([1, 2, 2])
