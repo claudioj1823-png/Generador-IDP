@@ -1,5 +1,6 @@
 import io
 import os
+import base64
 import pandas as pd
 import requests
 import streamlit as st
@@ -522,7 +523,7 @@ if df is not None:
                                     st.rerun()
                                 elif res.get("duplicado"):
                                     st.warning(
-                                        "⚠️ Este IDP ya fue registrado anteriormente."
+                                        ⚠️ Este IDP ya fue registrado anteriormente."
                                     )
                                 else:
                                     st.error(
@@ -807,3 +808,160 @@ else:
         " que la hoja de Google Sheets tenga los permisos públicos de lectura"
         " ('Cualquier persona con el vínculo')."
     )
+
+# ==========================================
+# SECCIÓN: ARCHIVO FOTOGRÁFICO DE IDP
+# ==========================================
+def enviar_fotos_idp(numero, proyecto, contratista, archivos):
+    """Envía fotografías al Apps Script y las asocia al IDP, proyecto y contratista."""
+    fotos = []
+    for archivo in archivos:
+        fotos.append({
+            "nombre": archivo.name,
+            "mimeType": archivo.type or "image/jpeg",
+            "contenido_base64": base64.b64encode(archivo.getvalue()).decode("utf-8"),
+        })
+
+    payload = {
+        "token": TOKEN_SECRETO,
+        "accion": "subir_fotos",
+        "numero": int(numero),
+        "proyecto": str(proyecto).strip(),
+        "contratista": str(contratista).strip(),
+        "fotos": fotos,
+    }
+    try:
+        respuesta = requests.post(URL_WEB_APP, json=payload, timeout=180)
+        return respuesta.json()
+    except Exception as e:
+        return {"ok": False, "mensaje": str(e)}
+
+
+def consultar_fotos_idp(numero, proyecto, contratista):
+    """Consulta las fotografías asociadas usando las tres claves del IDP."""
+    payload = {
+        "token": TOKEN_SECRETO,
+        "accion": "consultar_fotos",
+        "numero": int(numero),
+        "proyecto": str(proyecto).strip(),
+        "contratista": str(contratista).strip(),
+    }
+    try:
+        respuesta = requests.post(URL_WEB_APP, json=payload, timeout=60)
+        return respuesta.json()
+    except Exception as e:
+        return {"ok": False, "mensaje": str(e)}
+
+
+st.markdown("---")
+st.subheader("📸 Archivo Fotográfico de IDP")
+st.caption(
+    "Las fotografías se cargan de forma independiente, después de guardar el IDP. "
+    "No son obligatorias y no modifican el registro de mano de obra ni los materiales."
+)
+
+if df is not None and not df.empty:
+    contratistas_fotos = sorted(
+        str(c).strip()
+        for c in df["Contrata"].dropna().unique()
+        if str(c).strip() and str(c).strip().lower() != "nan"
+    )
+    proyectos_fotos = sorted(str(c).strip() for c in dict_proyectos.keys())
+
+    with st.expander("➕ Cargar fotografías a un IDP ya guardado", expanded=False):
+        col_f1, col_f2, col_f3 = st.columns([1, 2, 2])
+        with col_f1:
+            numero_fotos = st.number_input(
+                "Número de IDP", min_value=1, value=1, step=1, key="foto_numero_idp"
+            )
+        with col_f2:
+            proyecto_fotos = st.selectbox(
+                "Código de proyecto", proyectos_fotos, key="foto_proyecto_idp"
+            )
+        with col_f3:
+            contratista_fotos = st.selectbox(
+                "Contratista", contratistas_fotos, key="foto_contratista_idp"
+            )
+
+        archivos_fotos = st.file_uploader(
+            "Selecciona las fotografías (JPG o PNG)",
+            type=["jpg", "jpeg", "png"],
+            accept_multiple_files=True,
+            key="cargar_fotos_idp",
+        )
+
+        if archivos_fotos:
+            total_bytes = sum(len(a.getvalue()) for a in archivos_fotos)
+            st.caption(
+                f"{len(archivos_fotos)} fotografía(s) seleccionada(s) · "
+                f"{total_bytes / (1024 * 1024):.2f} MB en total"
+            )
+            if total_bytes > 10 * 1024 * 1024:
+                st.warning("El tamaño total supera 10 MB. Reduce la cantidad o el tamaño de las fotografías.")
+
+        if st.button("📤 Subir fotografías al IDP", key="btn_subir_fotos_idp"):
+            if not archivos_fotos:
+                st.warning("Selecciona al menos una fotografía.")
+            elif total_bytes > 10 * 1024 * 1024:
+                st.error("No se pueden enviar más de 10 MB en una sola carga.")
+            else:
+                with st.spinner("Subiendo fotografías a Google Drive..."):
+                    resultado_fotos = enviar_fotos_idp(
+                        numero_fotos, proyecto_fotos, contratista_fotos, archivos_fotos
+                    )
+                if resultado_fotos.get("ok"):
+                    st.success(
+                        resultado_fotos.get("mensaje", "Fotografías guardadas correctamente en Google Drive.")
+                    )
+                    st.rerun()
+                else:
+                    st.error(
+                        resultado_fotos.get("mensaje", "No fue posible guardar las fotografías.")
+                    )
+
+    with st.expander("🔎 Consultar fotografías de un IDP", expanded=False):
+        col_c1, col_c2, col_c3 = st.columns([1, 2, 2])
+        with col_c1:
+            numero_consulta_fotos = st.number_input(
+                "Número de IDP a consultar", min_value=1, value=1, step=1,
+                key="consulta_foto_numero"
+            )
+        with col_c2:
+            proyecto_consulta_fotos = st.selectbox(
+                "Código de proyecto a consultar", proyectos_fotos,
+                key="consulta_foto_proyecto"
+            )
+        with col_c3:
+            contratista_consulta_fotos = st.selectbox(
+                "Contratista a consultar", contratistas_fotos,
+                key="consulta_foto_contratista"
+            )
+
+        if st.button("Buscar fotografías", key="btn_consultar_fotos_idp"):
+            with st.spinner("Consultando archivo fotográfico..."):
+                consulta_fotos = consultar_fotos_idp(
+                    numero_consulta_fotos,
+                    proyecto_consulta_fotos,
+                    contratista_consulta_fotos,
+                )
+
+            if consulta_fotos.get("ok"):
+                lista_fotos = consulta_fotos.get("fotos", [])
+                if lista_fotos:
+                    st.success(f"Se encontraron {len(lista_fotos)} fotografía(s).")
+                    for i, foto in enumerate(lista_fotos, start=1):
+                        nombre_foto = foto.get("nombre") or foto.get("name") or f"Fotografía {i}"
+                        enlace_foto = (
+                            foto.get("url") or foto.get("driveUrl") or
+                            foto.get("enlace") or foto.get("URL")
+                        )
+                        if enlace_foto:
+                            st.markdown(f"{i}. **{nombre_foto}** — [Abrir fotografía]({enlace_foto})")
+                        else:
+                            st.write(f"{i}. {nombre_foto} (sin enlace disponible en la respuesta)")
+                else:
+                    st.info("No hay fotografías registradas para ese IDP, proyecto y contratista.")
+            else:
+                st.error(consulta_fotos.get("mensaje", "No fue posible consultar las fotografías."))
+else:
+    st.info("El archivo de actividades no está disponible; no se pudo cargar el módulo fotográfico.")
